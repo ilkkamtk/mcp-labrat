@@ -28,11 +28,25 @@ mcpServer.registerTool(
   },
   async ({ title, start, end, description, location }) => {
     try {
+      const startDate = new Date(start);
+      if (Number.isNaN(startDate.getTime())) {
+        throw new Error(
+          'Invalid "start" datetime. Expected an ISO 8601 string (e.g., 2025-12-29T12:00:00Z).',
+        );
+      }
+
+      const endDate = new Date(end);
+      if (Number.isNaN(endDate.getTime())) {
+        throw new Error(
+          'Invalid "end" datetime. Expected an ISO 8601 string (e.g., 2025-12-29T13:00:00Z).',
+        );
+      }
+
       // Nyt parametrit tulevat suoraan tekoälyltä valmiiksi jäsenneltynä!
       const { start: eventStart } = await createEvent({
         title,
-        start: new Date(start),
-        end: new Date(end),
+        start: startDate,
+        end: endDate,
         description,
         location,
       });

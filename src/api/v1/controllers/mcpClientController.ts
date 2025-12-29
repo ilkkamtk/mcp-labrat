@@ -9,7 +9,6 @@ const BodySchema = z.object({
 
 const postPrompt = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    console.log('bodi', req.body);
     const parseResult = BodySchema.safeParse(req.body);
     if (!parseResult.success) {
       next(new CustomError(parseResult.error.message, 400));

@@ -27,15 +27,19 @@ type ToolTraceEntry = {
   error?: string;
 };
 
-const openAIbaseUrl = process.env.OPENAI_API_URL;
-if (!openAIbaseUrl) {
-  throw new Error('OPENAI_API_URL is not defined');
-}
+const getClientConfig = () => {
+  const openAIbaseUrl = process.env.OPENAI_API_URL;
+  if (!openAIbaseUrl) {
+    throw new Error('OPENAI_API_URL is not defined');
+  }
 
-const mcpServerUrl = process.env.MCP_SERVER_URL;
-if (!mcpServerUrl) {
-  throw new Error('MCP_SERVER_URL is not defined');
-}
+  const mcpServerUrl = process.env.MCP_SERVER_URL;
+  if (!mcpServerUrl) {
+    throw new Error('MCP_SERVER_URL is not defined');
+  }
+
+  return { openAIbaseUrl, mcpServerUrl };
+};
 
 const getToolText = (result: unknown) => {
   const maybeResult = result as {
@@ -82,8 +86,14 @@ const parseToolArguments = (raw: unknown): unknown => {
   if (typeof raw !== 'string') return {};
   try {
     return JSON.parse(raw);
-  } catch {
-    return {};
+  } catch (error) {
+    const preview = raw.length > 400 ? raw.slice(0, 400) + '…' : raw;
+    if (process.env.DEBUG_MCP_CLIENT === '1') {
+      console.warn('Failed to parse tool arguments JSON:', preview);
+    }
+    throw new Error(
+      `Invalid JSON tool arguments. Expected a JSON object string. Received: ${preview}. Error: ${(error as Error).message}`,
+    );
   }
 };
 
@@ -91,6 +101,7 @@ const parseToolArguments = (raw: unknown): unknown => {
  * Runs a user prompt through OpenAI, allowing the model to call MCP tools exposed by the local MCP server.
  */
 const runPromptWithMcpServer = async (prompt: string) => {
+  const { openAIbaseUrl, mcpServerUrl } = getClientConfig();
   const model = process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
   const maxToolRounds = 8;
 
@@ -146,7 +157,7 @@ const runPromptWithMcpServer = async (prompt: string) => {
       // Convert response message -> request message param shape
       messages.push({
         role: message.role,
-        content: message.content ?? null,
+        content: message.content ?? '',
         tool_calls: message.tool_calls,
       });
 
@@ -171,7 +182,28 @@ const runPromptWithMcpServer = async (prompt: string) => {
         toolCallsTotal++;
 
         const toolName = toolCall.function.name;
-        const args = parseToolArguments(toolCall.function.arguments);
+        let args: unknown;
+        try {
+          args = parseToolArguments(toolCall.function.arguments);
+        } catch (error) {
+          const toolError = (error as Error).message;
+          const toolOutputText = `Error parsing arguments for tool "${toolName}": ${toolError}`;
+
+          toolTrace.push({
+            tool_call_id: toolCall.id,
+            name: toolName,
+            arguments: toolCall.function.arguments,
+            output: toolOutputText,
+            error: toolError,
+          });
+
+          messages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: toolOutputText,
+          });
+          continue;
+        }
 
         let toolOutputText = '';
         let toolError: string | undefined;
