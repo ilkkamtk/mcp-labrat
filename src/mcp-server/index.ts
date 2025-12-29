@@ -73,6 +73,16 @@ const parseWithOpenAI = async (
     end: new Date(content.end),
   };
 
+  // Validate parsed dates to avoid passing Invalid Date to calendar / iCal generation
+  if (
+    Number.isNaN(output.start.getTime()) ||
+    Number.isNaN(output.end.getTime())
+  ) {
+    throw new Error(
+      'Invalid response from AI: start or end is not a valid date',
+    );
+  }
+
   if (content.description) {
     output.description = content.description;
   }
