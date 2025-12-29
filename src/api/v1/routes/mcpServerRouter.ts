@@ -1,5 +1,5 @@
 import express from 'express';
-import { postMcp } from '../controllers/mcpController';
+import { postMcp } from '../controllers/mcpServerController';
 
 const router = express.Router();
 
