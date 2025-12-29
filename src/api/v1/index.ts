@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 
-import mcpRouter from './routes/mcpRouter';
+import mcpServerRouter from './routes/mcpServerRouter';
+import mcpClientRouter from './routes/mcpClientRouter';
 
 const router = express.Router();
 
@@ -10,6 +11,7 @@ router.get('/', (req: Request, res: Response) => {
   });
 });
 
-router.use('/mcp', mcpRouter);
+router.use('/mcp', mcpServerRouter);
+router.use('/client/', mcpClientRouter);
 
 export default router;
