@@ -12,6 +12,8 @@ type RunPromptResponse = {
   messages: ChatCompletionMessageParam[];
 };
 
+const MAX_ROUNDS = 10;
+
 export const runPromptWithMcpServer = async (
   prompt: string,
 ): Promise<RunPromptResponse> => {
@@ -54,7 +56,7 @@ export const runPromptWithMcpServer = async (
 
     let toolCallsCount = 0;
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < MAX_ROUNDS; i++) {
       const completion = await fetchData<ChatCompletion>(
         `${openAiApiUrl}/v1/chat/completions`,
         {
@@ -66,6 +68,7 @@ export const runPromptWithMcpServer = async (
             model: process.env.OPENAI_MODEL || 'gpt-4o',
             messages,
             tools: openaiTools.length > 0 ? openaiTools : undefined,
+            tool_choice: 'auto',
           }),
         },
       );
@@ -76,7 +79,7 @@ export const runPromptWithMcpServer = async (
       // Varmistetaan että viesti on oikeassa muodossa historialistassa
       messages.push({
         role: message.role,
-        content: message.content || '',
+        content: message.content,
         tool_calls: message.tool_calls,
       });
 
@@ -94,25 +97,35 @@ export const runPromptWithMcpServer = async (
         message.tool_calls.map(async (call) => {
           if (call.type !== 'function') return null;
 
+          let args: Record<string, unknown>;
+          try {
+            args = JSON.parse(call.function.arguments);
+          } catch (error) {
+            return {
+              role: 'tool',
+              tool_call_id: call.id,
+              content: `Error: Invalid JSON arguments for tool ${call.function.name}: ${error instanceof Error ? error.message : String(error)}`,
+            } as ChatCompletionMessageParam;
+          }
+
           try {
             const result = await mcpClient.callTool({
               name: call.function.name,
-              arguments: JSON.parse(call.function.arguments),
+              arguments: args,
             });
 
-            // YHDISTETTY LUKU: Teksti + jäsennelty sisältö
-            const textParts = (
-              result.content as { type: string; text: string }[]
-            )
-              .filter((content) => content.type === 'text')
-              .map((content) => content.text);
+            const content = Array.isArray(result.content) ? result.content : [];
 
-            // Jos työkalu palautti structuredContent (kuten listEvents), lisätään se mukaan
+            const textParts = content
+              .filter(
+                (c): c is { type: 'text'; text: string } => c.type === 'text',
+              )
+              .map((c) => c.text);
+
             if (result.structuredContent) {
               textParts.push(JSON.stringify(result.structuredContent));
             }
 
-            // Jos kumpaakaan ei löytynyt, varmuuskopio koko resultista
             const finalContent = textParts.join('\n') || JSON.stringify(result);
 
             return {
@@ -124,7 +137,7 @@ export const runPromptWithMcpServer = async (
             return {
               role: 'tool',
               tool_call_id: call.id,
-              content: `Error in ${call.function.name}: ${error instanceof Error ? error.message : String(error)}`,
+              content: `Error executing tool ${call.function.name}: ${error instanceof Error ? error.message : String(error)}`,
             } as ChatCompletionMessageParam;
           }
         }),
@@ -132,7 +145,9 @@ export const runPromptWithMcpServer = async (
 
       messages.push(...toolResults.filter((result) => result !== null));
     }
-    throw new Error('Max rounds reached');
+    throw new Error(
+      `Max tool rounds reached (${MAX_ROUNDS}). The model kept requesting tools.`,
+    );
   } finally {
     await transport.close();
   }
