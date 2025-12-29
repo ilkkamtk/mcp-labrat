@@ -50,7 +50,10 @@ export const runPromptWithMcpServer = async (
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: tool.inputSchema ?? { type: 'object', properties: {} },
+        parameters:
+          typeof tool.inputSchema === 'object' && tool.inputSchema !== null
+            ? tool.inputSchema
+            : { type: 'object', properties: {} },
       },
     }));
 
@@ -76,7 +79,7 @@ export const runPromptWithMcpServer = async (
       const message = completion.choices[0]?.message;
       if (!message) throw new Error('No message returned from OpenAI');
 
-      // Varmistetaan että viesti on oikeassa muodossa historialistassa
+      // Ensure message is properly formatted for history
       messages.push({
         role: message.role,
         content: message.content,
@@ -84,8 +87,10 @@ export const runPromptWithMcpServer = async (
       });
 
       if (!message.tool_calls || message.tool_calls.length === 0) {
+        const answer = message.content || '';
+
         return {
-          answer: message.content || '',
+          answer,
           toolCalls: toolCallsCount,
           messages: messages,
         };
@@ -99,7 +104,7 @@ export const runPromptWithMcpServer = async (
 
           let args: Record<string, unknown>;
           try {
-            args = JSON.parse(call.function.arguments);
+            args = JSON.parse(String(call.function.arguments));
           } catch (error) {
             return {
               role: 'tool',
