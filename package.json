@@ -16,5 +16,22 @@
   "bugs": {
     "url": "https://github.com/ilkkamtk/mcp-labrat/issues"
   },
-  "homepage": "https://github.com/ilkkamtk/mcp-labrat#readme"
+  "homepage": "https://github.com/ilkkamtk/mcp-labrat#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "tsdav": "^2.1.6",
+    "zod": "^4.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "globals": "^16.5.0",
+    "nodemon": "^3.1.11",
+    "prettier": "^3.7.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.50.1"
+  }
 }
