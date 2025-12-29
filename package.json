@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node dist/src/index.js",
+    "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/index.ts",
+    "build": "tsc && tsc-alias"
   },
   "repository": {
     "type": "git",
@@ -22,15 +24,23 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.1",
     "tsdav": "^2.1.6",
     "zod": "^4.2.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/morgan": "^1.9.10",
     "eslint": "^9.39.2",
     "globals": "^16.5.0",
     "nodemon": "^3.1.11",
     "prettier": "^3.7.4",
+    "ts-node": "^10.9.2",
+    "tsc-alias": "^1.8.16",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.50.1"
   }
