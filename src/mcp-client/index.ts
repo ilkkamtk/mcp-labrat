@@ -6,9 +6,6 @@ import {
   ChatCompletionMessageParam,
 } from 'openai/resources/index';
 
-// Määritellään yksinkertainen tyyppi MCP-sisällölle
-type McpContent = { type: 'text'; text: string } | { type: string };
-
 type RunPromptResponse = {
   answer: string;
   toolCalls: number;
@@ -18,9 +15,16 @@ type RunPromptResponse = {
 export const runPromptWithMcpServer = async (
   prompt: string,
 ): Promise<RunPromptResponse> => {
-  const transport = new StreamableHTTPClientTransport(
-    new URL(process.env.MCP_SERVER_URL!),
-  );
+  const mcpServerUrl = process.env.MCP_SERVER_URL;
+  if (!mcpServerUrl) {
+    throw new Error('MCP_SERVER_URL environment variable is not set');
+  }
+  const openAiApiUrl = process.env.OPENAI_API_URL;
+  if (!openAiApiUrl) {
+    throw new Error('OPENAI_API_URL environment variable is not set');
+  }
+
+  const transport = new StreamableHTTPClientTransport(new URL(mcpServerUrl));
   const mcpClient = new Client(
     { name: 'mcp-client', version: '1.0.0' },
     { capabilities: {} },
@@ -30,19 +34,21 @@ export const runPromptWithMcpServer = async (
   const messages: ChatCompletionMessageParam[] = [
     {
       role: 'system',
-      content: 'You are a helpful assistant with tool access.',
+      content: `You are a helpful assistant with tool access. 
+      Current time is ${new Date().toISOString()}. 
+      Always look at the tool outputs carefully before answering.`,
     },
     { role: 'user', content: prompt },
   ];
 
   try {
     const { tools } = await mcpClient.listTools();
-    const openaiTools = tools.map((t) => ({
+    const openaiTools = tools.map((tool) => ({
       type: 'function' as const,
       function: {
-        name: t.name,
-        description: t.description,
-        parameters: t.inputSchema ?? { type: 'object', properties: {} },
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema ?? { type: 'object', properties: {} },
       },
     }));
 
@@ -50,12 +56,11 @@ export const runPromptWithMcpServer = async (
 
     for (let i = 0; i < 10; i++) {
       const completion = await fetchData<ChatCompletion>(
-        `${process.env.OPENAI_API_URL}/v1/chat/completions`,
+        `${openAiApiUrl}/v1/chat/completions`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
           },
           body: JSON.stringify({
             model: process.env.OPENAI_MODEL || 'gpt-4o',
@@ -85,35 +90,50 @@ export const runPromptWithMcpServer = async (
 
       toolCallsCount += message.tool_calls.length;
 
-      await Promise.all(
+      const toolResults = await Promise.all(
         message.tool_calls.map(async (call) => {
-          if (call.type !== 'function') return;
+          if (call.type !== 'function') return null;
 
-          const result = await mcpClient.callTool({
-            name: call.function.name,
-            arguments: JSON.parse(call.function.arguments),
-          });
+          try {
+            const result = await mcpClient.callTool({
+              name: call.function.name,
+              arguments: JSON.parse(call.function.arguments),
+            });
 
-          const textContent = (result.content as McpContent[])
-            .filter(
-              (c): c is { type: 'text'; text: string } => c.type === 'text',
+            // YHDISTETTY LUKU: Teksti + jäsennelty sisältö
+            const textParts = (
+              result.content as { type: string; text: string }[]
             )
-            .map((c) => c.text)
-            .join('\n');
+              .filter((content) => content.type === 'text')
+              .map((content) => content.text);
 
-          messages.push({
-            role: 'tool',
-            tool_call_id: call.id,
-            content: textContent || JSON.stringify(result),
-          });
+            // Jos työkalu palautti structuredContent (kuten listEvents), lisätään se mukaan
+            if (result.structuredContent) {
+              textParts.push(JSON.stringify(result.structuredContent));
+            }
+
+            // Jos kumpaakaan ei löytynyt, varmuuskopio koko resultista
+            const finalContent = textParts.join('\n') || JSON.stringify(result);
+
+            return {
+              role: 'tool',
+              tool_call_id: call.id,
+              content: finalContent,
+            } as ChatCompletionMessageParam;
+          } catch (error) {
+            return {
+              role: 'tool',
+              tool_call_id: call.id,
+              content: `Error in ${call.function.name}: ${error instanceof Error ? error.message : String(error)}`,
+            } as ChatCompletionMessageParam;
+          }
         }),
       );
-    }
 
-    // TÄMÄ PUUTTUI: Heitä virhe jos 10 kierrosta ylittyy
-    throw new Error('Maximum tool call rounds reached');
+      messages.push(...toolResults.filter((result) => result !== null));
+    }
+    throw new Error('Max rounds reached');
   } finally {
-    // Varmistetaan aina yhteyden sulkeminen
     await transport.close();
   }
 };
