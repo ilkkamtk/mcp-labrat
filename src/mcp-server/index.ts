@@ -1,6 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getAuthenticatedClient } from '@/calDav/calendarClient';
+import fetchData from '@/utils/fetchData';
+import { ChatCompletion } from 'openai/resources';
 
 // Helper to call your OpenAI Proxy
 const parseWithOpenAI = async (command: string) => {
@@ -21,7 +23,7 @@ const parseWithOpenAI = async (command: string) => {
     }
   `;
 
-  const response = await fetch(proxyUrl + '/v1/chat/completions', {
+  const options: RequestInit = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -34,11 +36,21 @@ const parseWithOpenAI = async (command: string) => {
       ],
       response_format: { type: 'json_object' },
     }),
-  });
+  };
 
-  const data = await response.json();
-  console.log('data', data.choices[0].message.content);
-  // Adjust this based on your proxy's response structure
+  const data = await fetchData<ChatCompletion>(
+    proxyUrl + '/v1/chat/completions',
+    options,
+  );
+
+  if (
+    !data.choices ||
+    data.choices.length === 0 ||
+    !data.choices[0].message ||
+    !data.choices[0].message.content
+  ) {
+    throw new Error('No choices returned from AI');
+  }
   return JSON.parse(data.choices[0].message.content);
 };
 
@@ -64,6 +76,9 @@ mcpServer.registerTool(
       // 2. Use existing logic to create the event
       const client = await getAuthenticatedClient();
       const calendars = await client.fetchCalendars();
+      if (calendars.length === 0) {
+        throw new Error('No calendars found for the user.');
+      }
       const calendar = calendars[0];
 
       const start = new Date(startTime);

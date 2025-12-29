@@ -1,5 +1,10 @@
 import { DAVClient } from 'tsdav';
 
+const CALDAV_SERVER_URL =
+  process.env.CALDAV_SERVER_URL ?? 'http://localhost:5232/';
+const CALDAV_USERNAME = process.env.CALDAV_USERNAME ?? 'username';
+const CALDAV_PASSWORD = process.env.CALDAV_PASSWORD ?? 'password';
+
 let clientPromise: Promise<DAVClient> | null = null;
 
 const getAuthenticatedClient = () => {
@@ -9,8 +14,8 @@ const getAuthenticatedClient = () => {
   // Otherwise, create the promise and store it
   clientPromise = (async () => {
     const client = new DAVClient({
-      serverUrl: 'http://localhost:5232/',
-      credentials: { username: 'username', password: 'password' },
+      serverUrl: CALDAV_SERVER_URL,
+      credentials: { username: CALDAV_USERNAME, password: CALDAV_PASSWORD },
       authMethod: 'Basic',
       defaultAccountType: 'caldav',
     });
