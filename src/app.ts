@@ -9,12 +9,16 @@ import { errorHandler, notFound } from './middlewares';
 
 const app = express();
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 app.use(morgan('dev'));
 app.use(
   helmet.contentSecurityPolicy({
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-eval'"], // unsafe-eval is needed for Apidoc
+      scriptSrc: isDevelopment
+        ? ["'self'", "'unsafe-eval'"] // unsafe-eval is needed for Apidoc in development
+        : ["'self'"],
     },
   }),
 );
