@@ -1,11 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getAuthenticatedClient } from '@/calDav/calendarClient';
+import { createEvent, listEvents } from '@/calDav/calendarClient';
 import fetchData from '@/utils/fetchData';
 import { ChatCompletion } from 'openai/resources';
+import { ICalInput } from '@/utils/ical-lib';
 
 // Helper to call your OpenAI Proxy
-const parseWithOpenAI = async (command: string) => {
+const parseWithOpenAI = async (
+  command: string,
+): Promise<Omit<ICalInput, 'uid' | 'domain'>> => {
   const proxyUrl = process.env.OPENAI_API_URL;
   if (!proxyUrl) {
     throw new Error('OPENAI_API_URL is not defined');
@@ -14,12 +17,17 @@ const parseWithOpenAI = async (command: string) => {
   const prompt = `
     Extract event details from this command: "${command}"
     Current time is: ${new Date().toISOString()}
+    If end time is not specified, assume a default duration of 60 minutes.
+
+    If description or location are not specified, you can omit them.
     
     Return ONLY a JSON object with these fields:
     {
       "title": "string",
-      "startTime": "ISO8601 string",
-      "duration": number (minutes, default 60)
+      "start": "ISO8601 string",
+      "end": "ISO8601 string",
+      "description": "string (optional)",
+      "location": "string (optional)"
     }
   `;
 
@@ -51,7 +59,28 @@ const parseWithOpenAI = async (command: string) => {
   ) {
     throw new Error('No choices returned from AI');
   }
-  return JSON.parse(data.choices[0].message.content);
+
+  const content = JSON.parse(data.choices[0].message.content);
+
+  // check that content has required fields
+  if (!content.title || !content.start || !content.end) {
+    throw new Error('Invalid response from AI: missing required fields');
+  }
+
+  const output: Omit<ICalInput, 'uid' | 'domain'> = {
+    title: content.title,
+    start: new Date(content.start),
+    end: new Date(content.end),
+  };
+
+  if (content.description) {
+    output.description = content.description;
+  }
+  if (content.location) {
+    output.location = content.location;
+  }
+
+  return output;
 };
 
 // ------------------- MCP Server -------------------
@@ -71,41 +100,16 @@ mcpServer.registerTool(
   async ({ command }) => {
     try {
       // 1. Parse the natural language using OpenAI
-      const { title, startTime, duration } = await parseWithOpenAI(command);
+      const { title, start, end } = await parseWithOpenAI(command);
 
-      // 2. Use existing logic to create the event
-      const client = await getAuthenticatedClient();
-      const calendars = await client.fetchCalendars();
-      if (calendars.length === 0) {
-        throw new Error('No calendars found for the user.');
-      }
-      const calendar = calendars[0];
-
-      const start = new Date(startTime);
-      const endTime = new Date(start.getTime() + duration * 60000);
-
-      const eventId = Date.now();
-      const icalEvent = `BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VEVENT
-UID:${eventId}@mcp-server
-SUMMARY:${title}
-DTSTART:${start.toISOString().replace(/[-:]/g, '').split('.')[0]}Z
-DTEND:${endTime.toISOString().replace(/[-:]/g, '').split('.')[0]}Z
-END:VEVENT
-END:VCALENDAR`;
-
-      await client.createCalendarObject({
-        calendar,
-        filename: `${eventId}.ics`,
-        iCalString: icalEvent,
-      });
+      // 2. Use calendar client to create the event
+      const { start: eventStart } = await createEvent({ title, start, end });
 
       return {
         content: [
           {
             type: 'text',
-            text: `Successfully scheduled "${title}" for ${start.toLocaleString()}`,
+            text: `Successfully scheduled "${title}" for ${eventStart.toLocaleString()}`,
           },
         ],
       };
@@ -126,13 +130,9 @@ mcpServer.registerTool(
     outputSchema: z.object({ events: z.array(z.any()) }),
   },
   async () => {
-    const client = await getAuthenticatedClient();
-    const calendars = await client.fetchCalendars();
-    const events = await client.fetchCalendarObjects({
-      calendar: calendars[0],
-    });
+    const events = await listEvents();
     return {
-      content: [{ type: 'text', text: `Found ${events!.length} events.` }],
+      content: [{ type: 'text', text: `Found ${events.length} events.` }],
       structuredContent: { events },
     };
   },

@@ -1,3 +1,4 @@
+import { generateICal, ICalInput } from '@/utils/ical-lib';
 import { DAVClient } from 'tsdav';
 
 const CALDAV_SERVER_URL =
@@ -32,4 +33,48 @@ const getAuthenticatedClient = () => {
   return clientPromise;
 };
 
-export { getAuthenticatedClient };
+const createEvent = async ({
+  title,
+  start,
+  end,
+  description,
+  location,
+}: Omit<ICalInput, 'uid' | 'domain'>) => {
+  const client = await getAuthenticatedClient();
+  const calendars = await client.fetchCalendars();
+
+  if (calendars.length === 0) {
+    throw new Error('No calendars found for the user.');
+  }
+
+  const eventData: ICalInput = {
+    title,
+    start,
+    end,
+    description,
+    location,
+  };
+
+  const iCalString = generateICal(eventData);
+
+  await client.createCalendarObject({
+    calendar: calendars[0],
+    filename: `${Date.now()}.ics`,
+    iCalString,
+  });
+
+  return { title, start };
+};
+
+const listEvents = async () => {
+  const client = await getAuthenticatedClient();
+  const calendars = await client.fetchCalendars();
+  if (calendars.length === 0) return [];
+
+  const events = await client.fetchCalendarObjects({
+    calendar: calendars[0],
+  });
+  return events || [];
+};
+
+export { createEvent, listEvents };

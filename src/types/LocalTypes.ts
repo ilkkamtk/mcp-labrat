@@ -6,10 +6,4 @@ type ErrorResponse = MessageResponse & {
   stack?: string;
 };
 
-type Article = {
-  id: number;
-  title: string;
-  description: string;
-};
-
-export type { MessageResponse, ErrorResponse, Article };
+export type { MessageResponse, ErrorResponse };
