@@ -1,245 +1,119 @@
 import fetchData from '@/utils/fetchData';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { ChatCompletion } from 'openai/resources/index';
-import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import {
+  ChatCompletion,
+  ChatCompletionMessageParam,
+} from 'openai/resources/index';
 
-type OpenAiFunctionTool = {
-  type: 'function';
-  function: {
-    name: string;
-    description?: string;
-    parameters: Record<string, unknown>;
-  };
+// Määritellään yksinkertainen tyyppi MCP-sisällölle
+type McpContent = { type: 'text'; text: string } | { type: string };
+
+type RunPromptResponse = {
+  answer: string;
+  toolCalls: number;
+  messages: ChatCompletionMessageParam[];
 };
 
-type McpToolDefinition = {
-  name: string;
-  description?: string;
-  inputSchema?: Record<string, unknown>;
-};
-
-type ToolTraceEntry = {
-  tool_call_id: string;
-  name: string;
-  arguments: unknown;
-  output: string;
-  error?: string;
-};
-
-const getClientConfig = () => {
-  const openAIbaseUrl = process.env.OPENAI_API_URL;
-  if (!openAIbaseUrl) {
-    throw new Error('OPENAI_API_URL is not defined');
-  }
-
-  const mcpServerUrl = process.env.MCP_SERVER_URL;
-  if (!mcpServerUrl) {
-    throw new Error('MCP_SERVER_URL is not defined');
-  }
-
-  return { openAIbaseUrl, mcpServerUrl };
-};
-
-const getToolText = (result: unknown) => {
-  const maybeResult = result as {
-    content?: Array<{ type?: unknown; text?: unknown }>;
-    structuredContent?: unknown;
-    isError?: boolean;
-  };
-
-  const textParts = (maybeResult.content ?? [])
-    .filter((c) => c?.type === 'text' && typeof c.text === 'string')
-    .map((c) => c.text as string);
-
-  const text = textParts.join('\n').trim();
-  if (text) return text;
-  if (maybeResult.structuredContent !== undefined) {
-    return JSON.stringify(maybeResult.structuredContent, null, 2);
-  }
-  return '(no tool output)';
-};
-
-const mcpToolsToOpenAiTools = (
-  tools: McpToolDefinition[],
-): OpenAiFunctionTool[] => {
-  return tools.map((tool) => {
-    const parameters =
-      tool.inputSchema && typeof tool.inputSchema === 'object'
-        ? tool.inputSchema
-        : { type: 'object', properties: {} };
-
-    return {
-      type: 'function',
-      function: {
-        name: String(tool.name),
-        description: tool.description ? String(tool.description) : undefined,
-        parameters,
-      },
-    };
-  });
-};
-
-const parseToolArguments = (raw: unknown): unknown => {
-  if (raw === undefined || raw === null || raw === '') return {};
-  if (typeof raw === 'object') return raw;
-  if (typeof raw !== 'string') return {};
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
-    const preview = raw.length > 400 ? raw.slice(0, 400) + '…' : raw;
-    if (process.env.DEBUG_MCP_CLIENT === '1') {
-      console.warn('Failed to parse tool arguments JSON:', preview);
-    }
-    throw new Error(
-      `Invalid JSON tool arguments. Expected a JSON object string. Received: ${preview}. Error: ${(error as Error).message}`,
-    );
-  }
-};
-
-/**
- * Runs a user prompt through OpenAI, allowing the model to call MCP tools exposed by the local MCP server.
- */
-const runPromptWithMcpServer = async (prompt: string) => {
-  const { openAIbaseUrl, mcpServerUrl } = getClientConfig();
-  const model = process.env.OPENAI_MODEL ?? 'gpt-4.1-mini';
-  const maxToolRounds = 8;
-
-  const mcpClient = new Client({ name: 'mcp-labrat-client', version: '1.0.0' });
-  const transport = new StreamableHTTPClientTransport(new URL(mcpServerUrl));
+export const runPromptWithMcpServer = async (
+  prompt: string,
+): Promise<RunPromptResponse> => {
+  const transport = new StreamableHTTPClientTransport(
+    new URL(process.env.MCP_SERVER_URL!),
+  );
+  const mcpClient = new Client(
+    { name: 'mcp-client', version: '1.0.0' },
+    { capabilities: {} },
+  );
   await mcpClient.connect(transport);
 
+  const messages: ChatCompletionMessageParam[] = [
+    {
+      role: 'system',
+      content: 'You are a helpful assistant with tool access.',
+    },
+    { role: 'user', content: prompt },
+  ];
+
   try {
-    const toolsResult = await mcpClient.listTools();
-    const tools = toolsResult.tools as unknown as McpToolDefinition[];
-    const openaiTools = mcpToolsToOpenAiTools(tools);
-
-    const toolTrace: ToolTraceEntry[] = [];
-    let toolCallsTotal = 0;
-
-    const messages: ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content:
-          'You are a helpful assistant. Use the provided tools when needed. When calling a tool, strictly follow its JSON schema for arguments.',
+    const { tools } = await mcpClient.listTools();
+    const openaiTools = tools.map((t) => ({
+      type: 'function' as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: t.inputSchema ?? { type: 'object', properties: {} },
       },
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ];
+    }));
 
-    for (let round = 0; round < maxToolRounds; round++) {
-      const options: RequestInit = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // IMPORTANT: messages are mutated each round; rebuild body each request.
-        body: JSON.stringify({
-          model,
-          messages,
-          tools: openaiTools,
-          tool_choice: 'auto',
-        }),
-      };
+    let toolCallsCount = 0;
 
+    for (let i = 0; i < 10; i++) {
       const completion = await fetchData<ChatCompletion>(
-        openAIbaseUrl + '/v1/chat/completions',
-        options,
+        `${process.env.OPENAI_API_URL}/v1/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: process.env.OPENAI_MODEL || 'gpt-4o',
+            messages,
+            tools: openaiTools.length > 0 ? openaiTools : undefined,
+          }),
+        },
       );
 
       const message = completion.choices[0]?.message;
-      if (!message) {
-        throw new Error('OpenAI returned no message');
-      }
+      if (!message) throw new Error('No message returned from OpenAI');
 
-      // Convert response message -> request message param shape
+      // Varmistetaan että viesti on oikeassa muodossa historialistassa
       messages.push({
         role: message.role,
-        content: message.content ?? '',
+        content: message.content || '',
         tool_calls: message.tool_calls,
       });
 
-      if (process.env.DEBUG_MCP_CLIENT === '1') {
-        console.log('openai.message', message);
-      }
-
-      const toolCalls = message.tool_calls;
-      if (!toolCalls || toolCalls.length === 0) {
+      if (!message.tool_calls || message.tool_calls.length === 0) {
         return {
-          answer: message.content ?? '',
-          model,
-          mcpServerUrl,
-          toolCalls: toolCallsTotal,
-          toolTrace,
+          answer: message.content || '',
+          toolCalls: toolCallsCount,
+          messages: messages,
         };
       }
 
-      for (const toolCall of toolCalls) {
-        if (toolCall.type !== 'function') continue;
+      toolCallsCount += message.tool_calls.length;
 
-        toolCallsTotal++;
+      await Promise.all(
+        message.tool_calls.map(async (call) => {
+          if (call.type !== 'function') return;
 
-        const toolName = toolCall.function.name;
-        let args: unknown;
-        try {
-          args = parseToolArguments(toolCall.function.arguments);
-        } catch (error) {
-          const toolError = (error as Error).message;
-          const toolOutputText = `Error parsing arguments for tool "${toolName}": ${toolError}`;
-
-          toolTrace.push({
-            tool_call_id: toolCall.id,
-            name: toolName,
-            arguments: toolCall.function.arguments,
-            output: toolOutputText,
-            error: toolError,
+          const result = await mcpClient.callTool({
+            name: call.function.name,
+            arguments: JSON.parse(call.function.arguments),
           });
+
+          const textContent = (result.content as McpContent[])
+            .filter(
+              (c): c is { type: 'text'; text: string } => c.type === 'text',
+            )
+            .map((c) => c.text)
+            .join('\n');
 
           messages.push({
             role: 'tool',
-            tool_call_id: toolCall.id,
-            content: toolOutputText,
+            tool_call_id: call.id,
+            content: textContent || JSON.stringify(result),
           });
-          continue;
-        }
-
-        let toolOutputText = '';
-        let toolError: string | undefined;
-        try {
-          const result = await mcpClient.callTool({
-            name: toolName,
-            arguments: args as Record<string, unknown>,
-          });
-          toolOutputText = getToolText(result);
-        } catch (error) {
-          toolError = (error as Error).message;
-          toolOutputText = `Error calling tool "${toolName}": ${toolError}`;
-        }
-
-        toolTrace.push({
-          tool_call_id: toolCall.id,
-          name: toolName,
-          arguments: args,
-          output: toolOutputText,
-          error: toolError,
-        });
-
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: toolOutputText,
-        });
-      }
+        }),
+      );
     }
 
-    throw new Error(
-      `Max tool rounds reached (${maxToolRounds}). The model kept requesting tools.`,
-    );
+    // TÄMÄ PUUTTUI: Heitä virhe jos 10 kierrosta ylittyy
+    throw new Error('Maximum tool call rounds reached');
   } finally {
+    // Varmistetaan aina yhteyden sulkeminen
     await transport.close();
   }
 };
-
-export { runPromptWithMcpServer };
