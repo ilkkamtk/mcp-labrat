@@ -18,19 +18,25 @@ const keyMap = {
   [DESCRIPTION]: 'description',
   [SUMMARY]: 'summary',
   [LOCATION]: 'location',
-};
+} as const;
 
+type KeyMapKey = keyof typeof keyMap;
 type ICSJson = Record<string, string>;
 
 const clean = (string: string | undefined): string => {
   if (string == undefined) {
     return '';
   }
-  return decodeURI(string).trim();
+  // Wrap decodeURI in try/catch since ICS values aren't guaranteed to be URI-encoded
+  try {
+    return decodeURI(string).trim();
+  } catch {
+    return string.trim();
+  }
 };
 
-export const icsToJson = (icsData: string) => {
-  const array = [];
+export const icsToJson = (icsData: string): ICSJson[] => {
+  const array: ICSJson[] = [];
   let currentObj: ICSJson = {};
   let lastKey = '';
 
@@ -39,33 +45,34 @@ export const icsToJson = (icsData: string) => {
   let isAlarm = false;
   for (let i = 0, iLen = lines.length; i < iLen; ++i) {
     const line = lines[i] ?? '';
-    const lineData = line.split(':');
+    // Split only on the first colon to preserve values containing ':' (e.g., URLs, descriptions)
+    const colonIndex = line.indexOf(':');
+    const key = colonIndex === -1 ? line : line.slice(0, colonIndex);
+    const value = colonIndex === -1 ? '' : line.slice(colonIndex + 1);
 
-    let key = lineData[0];
-    const value = lineData[1];
+    let parsedKey = key;
 
-    if (key && key.indexOf(';') !== -1) {
-      const keyParts = key.split(';');
-      key = keyParts[0];
+    if (parsedKey && parsedKey.indexOf(';') !== -1) {
+      const keyParts = parsedKey.split(';');
+      parsedKey = keyParts[0] ?? parsedKey;
       // Maybe do something with that second part later
     }
 
-    if (key) {
-      if (lineData.length < 2) {
+    if (parsedKey) {
+      if (colonIndex === -1) {
         if (
-          key.startsWith(' ') &&
+          parsedKey.startsWith(' ') &&
           lastKey !== undefined &&
           lastKey.length > 0
         ) {
           currentObj[lastKey] += clean(line.substring(1));
         }
-      } else {
-        // @ts-expect-error: key is a string and may not be a valid key of keyMap
-        lastKey = keyMap[key];
+      } else if (parsedKey in keyMap) {
+        lastKey = keyMap[parsedKey as KeyMapKey];
       }
     }
 
-    switch (key) {
+    switch (parsedKey) {
       case EVENT_START:
         if (value === EVENT) {
           currentObj = {};

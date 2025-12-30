@@ -1,4 +1,5 @@
 import fetchData from '@/utils/fetchData';
+import { formatLocale } from '@/utils/dateUtils';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {
@@ -37,7 +38,7 @@ export const runPromptWithMcpServer = async (
       role: 'system',
       content: `
         You are a specialized assistant with access to specific MCP tools.
-        The current date and time is ${new Date().toLocaleString('fi-FI')}.
+        The current date and time is ${formatLocale(new Date())}.
 
         ABSOLUTE RULE:
         - Every user request MUST be handled using one or more of the provided tools.

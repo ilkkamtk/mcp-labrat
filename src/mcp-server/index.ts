@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { createEvent, listEvents } from '@/calDav/calendarClient';
+import { parseAsLocal } from '@/utils/dateUtils';
 
 // ------------------- MCP Server -------------------
 const mcpServer = new McpServer({ name: 'calendar-server', version: '1.0.0' });
@@ -36,14 +37,6 @@ mcpServer.registerTool(
   },
   async ({ title, start, end, description, location }) => {
     try {
-      console.log(`[createEvent] Received start: ${start}, end: ${end}`);
-
-      // Helper to parse date as local time to avoid timezone shifts
-      const parseAsLocal = (dateStr: string) => {
-        const localStr = dateStr.replace(/(Z|[+-]\d{2}:?\d{2})$/, '');
-        return new Date(localStr);
-      };
-
       const startDate = parseAsLocal(start);
       if (Number.isNaN(startDate.getTime())) {
         throw new Error(
