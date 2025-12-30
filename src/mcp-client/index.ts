@@ -9,7 +9,6 @@ import {
 type RunPromptResponse = {
   answer: string;
   toolCalls: number;
-  messages: ChatCompletionMessageParam[];
 };
 
 const MAX_ROUNDS = 10;
@@ -36,9 +35,27 @@ export const runPromptWithMcpServer = async (
   const messages: ChatCompletionMessageParam[] = [
     {
       role: 'system',
-      content: `You are a helpful assistant with tool access. 
-      Current time is ${new Date().toISOString()}. 
-      Always look at the tool outputs carefully before answering.`,
+      content: `
+        You are a specialized assistant with access to specific MCP tools.
+
+        ABSOLUTE RULE:
+        - Every user request MUST be handled using one or more of the provided tools.
+        - If a request cannot be fulfilled by using the tools, you MUST refuse.
+
+        Tool usage rules:
+        1. First, decide whether any tool can be used for the request.
+        2. If no tool applies, refuse the request.
+        3. If a tool is used, base the answer strictly on its output.
+        4. Do not add knowledge not present in tool results.
+
+        Internal reasoning:
+        - Think step by step about tool applicability.
+        - Do NOT reveal your reasoning.
+
+        Refusal format:
+        - One short sentence.
+        - No explanations.
+        `.trim(),
     },
     { role: 'user', content: prompt },
   ];
@@ -92,7 +109,6 @@ export const runPromptWithMcpServer = async (
         return {
           answer,
           toolCalls: toolCallsCount,
-          messages: messages,
         };
       }
 
