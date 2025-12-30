@@ -6,8 +6,8 @@
 /** Regex pattern to detect timezone indicators (Z or ±HH:MM offset) */
 const TIMEZONE_PATTERN = /(Z|[+-]\d{2}:?\d{2})$/;
 
-/** Regex pattern for valid local ISO 8601 datetime (e.g., 2025-01-01T17:00:00) */
-const LOCAL_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+/** Regex pattern for valid local ISO 8601 datetime (e.g., 2025-01-01T17:00 or 2025-01-01T17:00:00) */
+const LOCAL_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
 
 export type ParseAsLocalOptions = {
   /**
@@ -41,7 +41,7 @@ export const parseAsLocal = (
     if (!LOCAL_DATETIME_PATTERN.test(dateStr)) {
       throw new Error(
         `Invalid local datetime format: "${dateStr}". ` +
-          'Expected ISO 8601 format: YYYY-MM-DDTHH:mm:ss (e.g., 2025-01-01T17:00:00).',
+          'Expected ISO 8601 format: YYYY-MM-DDTHH:mm or YYYY-MM-DDTHH:mm:ss (e.g., 2025-01-01T17:00 or 2025-01-01T17:00:00).',
       );
     }
   } else {

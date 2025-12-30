@@ -21,7 +21,20 @@ const keyMap = {
 } as const;
 
 type KeyMapKey = keyof typeof keyMap;
-type ICSJson = Record<string, string>;
+
+/** Represents a parsed ICS calendar event with known fields */
+export interface ICSEvent {
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+  summary?: string;
+  location?: string;
+  /** Allow additional fields that may be added in the future */
+  [key: string]: string | undefined;
+}
+
+/** @deprecated Use ICSEvent instead */
+type ICSJson = ICSEvent;
 
 const clean = (string: string | undefined): string => {
   if (string == undefined) {
