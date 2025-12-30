@@ -37,6 +37,7 @@ export const runPromptWithMcpServer = async (
       role: 'system',
       content: `
         You are a specialized assistant with access to specific MCP tools.
+        The current date and time is ${new Date().toISOString()} (ISO 8601, UTC).
 
         ABSOLUTE RULE:
         - Every user request MUST be handled using one or more of the provided tools.

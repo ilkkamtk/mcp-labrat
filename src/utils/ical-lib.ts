@@ -1,3 +1,5 @@
+import { formatUTC, formatFloating } from './dateUtils';
+
 export type ICalInput = {
   title: string;
   start: Date;
@@ -7,9 +9,6 @@ export type ICalInput = {
   uid?: string;
   domain?: string;
 };
-
-const formatDate = (date: Date): string =>
-  date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
 const escapeText = (str: string): string =>
   str.replace(/[\\,;]/g, (match) => `\\${match}`).replace(/\n/g, '\\n');
@@ -26,7 +25,7 @@ const generateICal = (input: ICalInput): string => {
   } = input;
 
   const finalUid = uid || `${crypto.randomUUID()}@${domain}`;
-  const now = formatDate(new Date());
+  const now = formatUTC(new Date());
 
   // taulukon käyttö helpottaa luettavuutta ja valinnaiten kenttien käsittelyä
   const lines = [
@@ -37,8 +36,8 @@ const generateICal = (input: ICalInput): string => {
     'BEGIN:VEVENT',
     `UID:${finalUid}`,
     `DTSTAMP:${now}`,
-    `DTSTART:${formatDate(start)}`,
-    `DTEND:${formatDate(end)}`,
+    `DTSTART:${formatFloating(start)}`,
+    `DTEND:${formatFloating(end)}`,
     `SUMMARY:${escapeText(title)}`,
   ];
 
