@@ -8,8 +8,21 @@ export type ICalInput = {
   domain?: string;
 };
 
-const formatDate = (date: Date): string =>
+const formatUTC = (date: Date): string =>
   date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+const formatFloating = (date: Date): string => {
+  const pad = (num: number) => num.toString().padStart(2, '0');
+  return (
+    date.getFullYear() +
+    pad(date.getMonth() + 1) +
+    pad(date.getDate()) +
+    'T' +
+    pad(date.getHours()) +
+    pad(date.getMinutes()) +
+    pad(date.getSeconds())
+  );
+};
 
 const escapeText = (str: string): string =>
   str.replace(/[\\,;]/g, (match) => `\\${match}`).replace(/\n/g, '\\n');
@@ -26,7 +39,7 @@ const generateICal = (input: ICalInput): string => {
   } = input;
 
   const finalUid = uid || `${crypto.randomUUID()}@${domain}`;
-  const now = formatDate(new Date());
+  const now = formatUTC(new Date());
 
   // taulukon käyttö helpottaa luettavuutta ja valinnaiten kenttien käsittelyä
   const lines = [
@@ -37,8 +50,8 @@ const generateICal = (input: ICalInput): string => {
     'BEGIN:VEVENT',
     `UID:${finalUid}`,
     `DTSTAMP:${now}`,
-    `DTSTART:${formatDate(start)}`,
-    `DTEND:${formatDate(end)}`,
+    `DTSTART:${formatFloating(start)}`,
+    `DTEND:${formatFloating(end)}`,
     `SUMMARY:${escapeText(title)}`,
   ];
 
