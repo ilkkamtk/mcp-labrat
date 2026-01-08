@@ -5,11 +5,6 @@ import CustomError from './classes/CustomError';
 import fetchData from './utils/fetchData';
 import { TranscriptionVerbose } from 'openai/resources/audio/transcriptions';
 
-const openAiApiUrl = process.env.OPENAI_API_URL;
-if (!openAiApiUrl) {
-  throw new Error('OPENAI_API_URL environment variable is not set');
-}
-
 const notFound = (req: Request, res: Response, next: NextFunction) => {
   const error = new CustomError(`🔍 - Not Found - ${req.originalUrl}`, 404);
   next(error);
@@ -40,62 +35,70 @@ const audioTranscriptionMiddleware = async (
   _res: Response,
   next: NextFunction,
 ) => {
-  const filePath = req.file?.path;
+  const file = req.file;
+  if (!file) {
+    next();
+    return;
+  }
+
+  const filePath = file.path;
+  const cleanup = async () => {
+    try {
+      await fs.unlink(filePath);
+    } catch (err) {
+      console.error('Failed to delete uploaded file:', err);
+    }
+  };
 
   try {
-    if (!req.file) {
-      next();
-      return;
+    const openAiApiUrl = process.env.OPENAI_API_URL;
+    if (!openAiApiUrl) {
+      throw new CustomError(
+        'Audio transcription service is not configured on the server',
+        500,
+      );
     }
 
-    const audioBuffer = await fs.readFile(req.file.path);
+    const audioBuffer = await fs.readFile(filePath);
     const audioBlob = new Blob([audioBuffer], {
-      type: req.file.mimetype ?? 'application/octet-stream',
+      type: file.mimetype ?? 'application/octet-stream',
     });
 
     const formData = new FormData();
-    formData.append('file', audioBlob, req.file.originalname ?? 'audio');
+    formData.append('file', audioBlob, file.originalname ?? 'audio');
     formData.append('model', 'whisper-1');
 
     const transcription = await fetchData<TranscriptionVerbose>(
       openAiApiUrl + '/v1/audio/transcriptions',
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
         body: formData,
       },
     );
 
-    console.log('transcription', transcription.text);
-
     req.body.prompt = transcription.text;
 
-    // Best-effort, deterministic cleanup of uploaded file
-    try {
-      if (filePath) {
-        await fs.unlink(filePath);
-      }
-    } catch (err) {
-      console.error('Failed to delete uploaded file:', err);
+    if (process.env.DEBUG_TRANSCRIPTION === 'true') {
+      console.debug('transcription received', {
+        length: transcription.text?.length ?? 0,
+      });
     }
 
     next();
   } catch (error) {
-    // Attempt cleanup even on error
-    try {
-      if (filePath) {
-        await fs.unlink(filePath);
-      }
-    } catch (err) {
-      console.error('Failed to delete uploaded file:', err);
+    if (error instanceof CustomError) {
+      next(error);
+    } else {
+      next(
+        new CustomError(
+          (error as Error)?.message ?? 'Audio transcription failed',
+          500,
+        ),
+      );
     }
-
-    next(
-      new CustomError(
-        (error as Error)?.message ?? 'Audio transcription failed',
-        500,
-      ),
-    );
+  } finally {
+    // Best-effort, deterministic cleanup of uploaded file
+    await cleanup();
   }
 };
 

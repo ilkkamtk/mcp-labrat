@@ -150,10 +150,17 @@ sendBtn.addEventListener('click', async () => {
 
     // Speak out the response
     if ('answer' in data) {
-      const utterance = new SpeechSynthesisUtterance(data.answer);
-      utterance.lang = 'fi-FI';
-      speechSynthesis.cancel();
-      speechSynthesis.speak(utterance);
+      const canSpeak =
+        typeof window !== 'undefined' &&
+        'speechSynthesis' in window &&
+        typeof window.SpeechSynthesisUtterance === 'function';
+
+      if (canSpeak) {
+        const utterance = new SpeechSynthesisUtterance(data.answer);
+        utterance.lang = 'fi-FI';
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+      }
     }
 
     setUiState('recorded');
