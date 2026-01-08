@@ -6,6 +6,7 @@ let mediaRecorder;
 let audioChunks = [];
 let lastRecordingBlob = null;
 let currentStream = null;
+let stopRecordingPromise = null;
 
 const setUiState = (state) => {
   // state: 'idle' | 'recording' | 'recorded' | 'sending'
@@ -39,35 +40,74 @@ const setUiState = (state) => {
 
 setUiState('idle');
 
+const releaseMicrophone = () => {
+  if (!currentStream) return;
+  currentStream.getTracks().forEach((t) => t.stop());
+  currentStream = null;
+};
+
+const startRecording = async () => {
+  currentStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  mediaRecorder = new MediaRecorder(currentStream);
+  audioChunks = [];
+  lastRecordingBlob = null;
+
+  stopRecordingPromise = new Promise((resolve, reject) => {
+    const handleDataAvailable = (e) => {
+      audioChunks.push(e.data);
+    };
+
+    const handleStop = () => {
+      mediaRecorder.removeEventListener('dataavailable', handleDataAvailable);
+      mediaRecorder.removeEventListener('stop', handleStop);
+      mediaRecorder.removeEventListener('error', handleError);
+      resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+    };
+
+    const handleError = (e) => {
+      mediaRecorder.removeEventListener('dataavailable', handleDataAvailable);
+      mediaRecorder.removeEventListener('stop', handleStop);
+      mediaRecorder.removeEventListener('error', handleError);
+      reject(e);
+    };
+
+    mediaRecorder.addEventListener('dataavailable', handleDataAvailable);
+    mediaRecorder.addEventListener('stop', handleStop);
+    mediaRecorder.addEventListener('error', handleError);
+  });
+
+  mediaRecorder.start();
+};
+
+const stopRecording = async () => {
+  if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+
+  const stopPromise = stopRecordingPromise;
+  mediaRecorder.stop();
+
+  try {
+    lastRecordingBlob = await stopPromise;
+  } finally {
+    releaseMicrophone();
+    stopRecordingPromise = null;
+  }
+};
+
 startBtn.addEventListener('click', async () => {
   try {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop();
+      await stopRecording();
       setUiState('recorded');
       output.textContent = 'Recording stopped. Ready to send.';
       return;
     }
 
-    currentStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(currentStream);
-    audioChunks = [];
-    lastRecordingBlob = null;
-
-    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-    mediaRecorder.onstop = () => {
-      lastRecordingBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      // Release the microphone
-      if (currentStream) {
-        currentStream.getTracks().forEach((t) => t.stop());
-        currentStream = null;
-      }
-    };
-
-    mediaRecorder.start();
+    await startRecording();
     setUiState('recording');
     output.textContent = 'Recording started...';
   } catch (err) {
     console.error(err);
+    releaseMicrophone();
     setUiState('idle');
     output.textContent = 'Could not start recording (mic permission?).';
   }
@@ -87,10 +127,21 @@ sendBtn.addEventListener('click', async () => {
 
   try {
     // Send audio to backend STT middleware -> MCP
-    const res = await fetch('http://localhost:3000/api/v1/client', {
+    const res = await fetch('/api/v1/client', {
       method: 'POST',
       body: formData,
     });
+
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      throw new Error(errorText || `Request failed (${res.status})`);
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await res.text().catch(() => '');
+      throw new Error(text || 'Unexpected non-JSON response from server.');
+    }
 
     const data = await res.json();
 
@@ -108,7 +159,8 @@ sendBtn.addEventListener('click', async () => {
     setUiState('recorded');
   } catch (err) {
     console.error(err);
-    output.textContent = 'Error sending audio to server.';
+    output.textContent =
+      err instanceof Error ? err.message : 'Error sending audio to server.';
     setUiState(lastRecordingBlob ? 'recorded' : 'idle');
   }
 });

@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import { ErrorResponse } from './types/LocalTypes';
 import CustomError from './classes/CustomError';
 import fetchData from './utils/fetchData';
@@ -34,17 +34,21 @@ const errorHandler = (
  * Middleware to receive audio and transcribe it using OpenAI's Whisper API.
  */
 const audioTranscriptionMiddleware = async (
-  req: Request<object, object, { prompt?: string; file?: Express.Multer.File }>,
+  req: Request<object, object, { prompt?: string }> & {
+    file?: Express.Multer.File;
+  },
   _res: Response,
   next: NextFunction,
 ) => {
+  const filePath = req.file?.path;
+
   try {
     if (!req.file) {
       next();
       return;
     }
 
-    const audioBuffer = await fs.promises.readFile(req.file.path);
+    const audioBuffer = await fs.readFile(req.file.path);
     const audioBlob = new Blob([audioBuffer], {
       type: req.file.mimetype ?? 'application/octet-stream',
     });
@@ -66,14 +70,32 @@ const audioTranscriptionMiddleware = async (
 
     req.body.prompt = transcription.text;
 
-    fs.unlink(req.file.path, (err) => {
-      if (err) console.error(err);
-    });
+    // Best-effort, deterministic cleanup of uploaded file
+    try {
+      if (filePath) {
+        await fs.unlink(filePath);
+      }
+    } catch (err) {
+      console.error('Failed to delete uploaded file:', err);
+    }
 
     next();
   } catch (error) {
-    new CustomError((error as Error).message, 500);
-    next(error);
+    // Attempt cleanup even on error
+    try {
+      if (filePath) {
+        await fs.unlink(filePath);
+      }
+    } catch (err) {
+      console.error('Failed to delete uploaded file:', err);
+    }
+
+    next(
+      new CustomError(
+        (error as Error)?.message ?? 'Audio transcription failed',
+        500,
+      ),
+    );
   }
 };
 
