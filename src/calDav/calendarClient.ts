@@ -1,10 +1,19 @@
-import { generateICal, ICalInput } from '@/utils/ical-lib';
+import { generateICal, ICalInput, parseICalDate } from '@/utils/ical-lib';
+import { icsToJson } from '@/utils/icsToJson';
 import { DAVClient } from 'tsdav';
 
 const CALDAV_SERVER_URL =
   process.env.CALDAV_SERVER_URL ?? 'http://localhost:5232/';
 const CALDAV_USERNAME = process.env.CALDAV_USERNAME ?? 'username';
 const CALDAV_PASSWORD = process.env.CALDAV_PASSWORD ?? 'password';
+
+export type CalendarEvent = {
+  title: string;
+  start: string | null;
+  end: string | null;
+  location: string | null;
+  description: string | null;
+};
 
 let clientPromise: Promise<DAVClient> | null = null;
 
@@ -77,4 +86,40 @@ const listEvents = async () => {
   return events || [];
 };
 
-export { createEvent, listEvents };
+const getEventsInRange = async (
+  start: Date,
+  end: Date,
+): Promise<CalendarEvent[]> => {
+  const client = await getAuthenticatedClient();
+  const calendars = await client.fetchCalendars();
+  if (calendars.length === 0) return [];
+
+  // Use tsdav's timeRange with ISO 8601 format
+  const events = await client.fetchCalendarObjects({
+    calendar: calendars[0],
+    timeRange: {
+      start: start.toISOString(),
+      end: end.toISOString(),
+    },
+  });
+
+  if (!events || events.length === 0) {
+    return [];
+  }
+
+  // Parse events
+  return events
+    .filter((calendarObject) => calendarObject.data)
+    .flatMap((calendarObject) => {
+      const parsed = icsToJson(calendarObject.data);
+      return parsed.map((parsedEvent) => ({
+        title: parsedEvent.summary || 'Untitled',
+        start: parseICalDate(parsedEvent.startDate),
+        end: parseICalDate(parsedEvent.endDate),
+        location: parsedEvent.location || null,
+        description: parsedEvent.description || null,
+      }));
+    });
+};
+
+export { createEvent, listEvents, getEventsInRange };

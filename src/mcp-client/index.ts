@@ -5,6 +5,10 @@ import {
   ChatCompletion,
   ChatCompletionMessageParam,
 } from 'openai/resources/index';
+import {
+  getCurrentDateInfo,
+  setTimezone,
+} from '@/utils/relativeDateCalculator';
 
 type RunPromptResponse = {
   answer: string;
@@ -15,7 +19,10 @@ const MAX_ROUNDS = 10;
 
 export const runPromptWithMcpServer = async (
   prompt: string,
+  timezone: string = 'Europe/Helsinki',
 ): Promise<RunPromptResponse> => {
+  // Set timezone for date calculations
+  setTimezone(timezone);
   const mcpServerUrl = process.env.MCP_SERVER_URL;
   if (!mcpServerUrl) {
     throw new Error('MCP_SERVER_URL environment variable is not set');
@@ -32,31 +39,71 @@ export const runPromptWithMcpServer = async (
   );
   await mcpClient.connect(transport);
 
+  const dateInfo = getCurrentDateInfo();
+
   const messages: ChatCompletionMessageParam[] = [
     {
       role: 'system',
       content: `
-        You are a specialized assistant with access to specific MCP tools.
-        The current date and time is ${new Date().toISOString()} (ISO 8601, UTC).
+You are a specialized assistant with access to specific MCP tools.
 
-        ABSOLUTE RULE:
-        - Every user request MUST be handled using one or more of the provided tools.
-        - If a request cannot be fulfilled by using the tools, you MUST refuse.
+${dateInfo}
 
-        Tool usage rules:
-        1. First, decide whether any tool can be used for the request.
-        2. If no tool applies, refuse the request.
-        3. If a tool is used, base the answer strictly on its output.
-        4. Do not add knowledge not present in tool results.
+CRITICAL DATE RULES - READ CAREFULLY:
+1. You must NEVER compute or output absolute dates (like 2026-01-12 or ISO timestamps).
+2. For calendar events, you MUST provide ONLY relative date information:
+   - weekOffset: number (0 = this week, 1 = next week, 2 = two weeks from now, etc.)
+   - weekday: string (monday, tuesday, wednesday, thursday, friday, saturday, sunday)
+   - time: string in HH:mm format (24-hour)
 
-        Internal reasoning:
-        - Think step by step about tool applicability.
-        - Do NOT reveal your reasoning.
+3. Week definition (ISO-8601):
+   - Week starts on MONDAY (weekday 1)
+   - Week ends on SUNDAY (weekday 7)
+   - "This week" means the current Mon-Sun period
+   - "Next week" means the NEXT Mon-Sun period (weekOffset: 1)
 
-        Refusal format:
-        - One short sentence.
-        - No explanations.
-        `.trim(),
+4. Special case - "tomorrow":
+   - Calculate weekOffset and weekday based on what day tomorrow actually is
+   - If today is Thursday, tomorrow is Friday → weekOffset: 0, weekday: "friday"
+   - If today is Saturday, tomorrow is Sunday → weekOffset: 0, weekday: "sunday"
+   - If today is Sunday, tomorrow is Monday → weekOffset: 1, weekday: "monday"
+
+5. Examples of correct interpretation:
+   - "next Monday" → weekOffset: 1, weekday: "monday"
+   - "next Friday" → weekOffset: 1, weekday: "friday"
+   - "this Friday" → weekOffset: 0, weekday: "friday"
+   - "two weeks from now on Tuesday" → weekOffset: 2, weekday: "tuesday"
+   - "tomorrow" when today is Thursday → weekOffset: 0, weekday: "friday"
+
+6. The server will calculate the actual date. Your job is ONLY to extract the relative intent.
+
+WORKFLOW FOR CREATING EVENTS WITH AVAILABILITY CHECK:
+When the user asks to create an event "if the time is free" or similar:
+1. FIRST call getEventsInTimeSlot with the relative date parameters
+2. If no events are returned, the time slot is free - call createEvent
+3. If events are returned, inform the user about the existing events
+
+Do NOT try to interpret dates from listEvents output. Use getEventsInTimeSlot instead.
+
+ABSOLUTE RULE:
+- Every user request MUST be handled using one or more of the provided tools.
+- If a request cannot be fulfilled by using the tools, you MUST refuse.
+
+Tool usage rules:
+1. First, decide whether any tool can be used for the request.
+2. If no tool applies, refuse the request.
+3. If a tool is used, base the answer strictly on its output.
+4. Do not add knowledge not present in tool results.
+
+Internal reasoning:
+- Think step by step about tool applicability.
+- Do NOT reveal your reasoning.
+- When determining weekOffset, count from current week (0) to target week.
+
+Refusal format:
+- One short sentence.
+- No explanations.
+`.trim(),
     },
     { role: 'user', content: prompt },
   ];
@@ -140,9 +187,10 @@ export const runPromptWithMcpServer = async (
 
             const textParts = content
               .filter(
-                (c): c is { type: 'text'; text: string } => c.type === 'text',
+                (item): item is { type: 'text'; text: string } =>
+                  item.type === 'text',
               )
-              .map((c) => c.text);
+              .map((item) => item.text);
 
             if (result.structuredContent) {
               textParts.push(JSON.stringify(result.structuredContent));

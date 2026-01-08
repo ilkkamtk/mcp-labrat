@@ -56,7 +56,7 @@ export const icsToJson = (icsData: string): ICSJson[] => {
   const lines = icsData.split(NEW_LINE);
 
   let isAlarm = false;
-  for (let i = 0, iLen = lines.length; i < iLen; ++i) {
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
     // Split only on the first colon to preserve values containing ':' (e.g., URLs, descriptions)
     const colonIndex = line.indexOf(':');
