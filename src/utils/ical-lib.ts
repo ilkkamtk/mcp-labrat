@@ -1,4 +1,4 @@
-import { formatUTC, formatFloating } from './dateUtils';
+import { DateTime } from 'luxon';
 
 export type ICalInput = {
   title: string;
@@ -10,8 +10,19 @@ export type ICalInput = {
   domain?: string;
 };
 
+/**
+ * Escape special characters for iCal (RFC 5545) text values.
+ * - Backslash, comma, semicolon are escaped with backslash
+ * - Newlines are converted to literal \n
+ */
 const escapeText = (str: string): string =>
   str.replace(/[\\,;]/g, (match) => `\\${match}`).replace(/\n/g, '\\n');
+
+/**
+ * Format a Date as iCal UTC timestamp (YYYYMMDDTHHMMSSZ).
+ */
+const toCalDavUTC = (date: Date): string =>
+  DateTime.fromJSDate(date).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'");
 
 const generateICal = (input: ICalInput): string => {
   const {
@@ -25,9 +36,8 @@ const generateICal = (input: ICalInput): string => {
   } = input;
 
   const finalUid = uid || `${crypto.randomUUID()}@${domain}`;
-  const now = formatUTC(new Date());
+  const now = toCalDavUTC(new Date());
 
-  // taulukon käyttö helpottaa luettavuutta ja valinnaiten kenttien käsittelyä
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -36,8 +46,8 @@ const generateICal = (input: ICalInput): string => {
     'BEGIN:VEVENT',
     `UID:${finalUid}`,
     `DTSTAMP:${now}`,
-    `DTSTART:${formatFloating(start)}`,
-    `DTEND:${formatFloating(end)}`,
+    `DTSTART:${toCalDavUTC(start)}`,
+    `DTEND:${toCalDavUTC(end)}`,
     `SUMMARY:${escapeText(title)}`,
   ];
 

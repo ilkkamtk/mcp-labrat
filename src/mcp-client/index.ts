@@ -5,6 +5,13 @@ import {
   ChatCompletion,
   ChatCompletionMessageParam,
 } from 'openai/resources/index';
+import { getCurrentDateInfo } from '@/utils/relativeDateCalculator';
+import { DEFAULT_TIMEZONE } from '@/utils/weekday';
+import { SYSTEM_PROMPT_DATE_RULES } from '@/utils/relativeDateRules';
+import {
+  SYSTEM_PROMPT_WORKFLOW_RULES,
+  SYSTEM_PROMPT_TOOL_RULES,
+} from '@/utils/systemPromptRules';
 
 type RunPromptResponse = {
   answer: string;
@@ -15,6 +22,7 @@ const MAX_ROUNDS = 10;
 
 export const runPromptWithMcpServer = async (
   prompt: string,
+  timezone: string = DEFAULT_TIMEZONE,
 ): Promise<RunPromptResponse> => {
   const mcpServerUrl = process.env.MCP_SERVER_URL;
   if (!mcpServerUrl) {
@@ -32,31 +40,22 @@ export const runPromptWithMcpServer = async (
   );
   await mcpClient.connect(transport);
 
+  const dateInfo = getCurrentDateInfo(timezone);
+
   const messages: ChatCompletionMessageParam[] = [
     {
       role: 'system',
       content: `
-        You are a specialized assistant with access to specific MCP tools.
-        The current date and time is ${new Date().toISOString()} (ISO 8601, UTC).
+You are a specialized assistant with access to specific MCP tools.
 
-        ABSOLUTE RULE:
-        - Every user request MUST be handled using one or more of the provided tools.
-        - If a request cannot be fulfilled by using the tools, you MUST refuse.
+${dateInfo}
 
-        Tool usage rules:
-        1. First, decide whether any tool can be used for the request.
-        2. If no tool applies, refuse the request.
-        3. If a tool is used, base the answer strictly on its output.
-        4. Do not add knowledge not present in tool results.
+${SYSTEM_PROMPT_DATE_RULES}
 
-        Internal reasoning:
-        - Think step by step about tool applicability.
-        - Do NOT reveal your reasoning.
+${SYSTEM_PROMPT_WORKFLOW_RULES}
 
-        Refusal format:
-        - One short sentence.
-        - No explanations.
-        `.trim(),
+${SYSTEM_PROMPT_TOOL_RULES}
+`.trim(),
     },
     { role: 'user', content: prompt },
   ];
@@ -140,9 +139,10 @@ export const runPromptWithMcpServer = async (
 
             const textParts = content
               .filter(
-                (c): c is { type: 'text'; text: string } => c.type === 'text',
+                (item): item is { type: 'text'; text: string } =>
+                  item.type === 'text',
               )
-              .map((c) => c.text);
+              .map((item) => item.text);
 
             if (result.structuredContent) {
               textParts.push(JSON.stringify(result.structuredContent));

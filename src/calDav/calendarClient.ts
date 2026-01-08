@@ -1,4 +1,8 @@
 import { generateICal, ICalInput } from '@/utils/ical-lib';
+import {
+  parseCalendarObjects,
+  type CalendarEvent,
+} from '@/utils/calendar-events';
 import { DAVClient } from 'tsdav';
 
 const CALDAV_SERVER_URL =
@@ -33,6 +37,22 @@ const getAuthenticatedClient = () => {
   return clientPromise;
 };
 
+/**
+ * Get the primary (first) calendar for the authenticated user.
+ * Shared helper to avoid duplicating calendar fetching logic.
+ * @throws Error if no calendars are found
+ */
+const getPrimaryCalendar = async () => {
+  const client = await getAuthenticatedClient();
+  const calendars = await client.fetchCalendars();
+
+  if (calendars.length === 0) {
+    throw new Error('No calendars found for the user.');
+  }
+
+  return { client, calendar: calendars[0] };
+};
+
 const createEvent = async ({
   title,
   start,
@@ -40,12 +60,7 @@ const createEvent = async ({
   description,
   location,
 }: Omit<ICalInput, 'uid' | 'domain'>) => {
-  const client = await getAuthenticatedClient();
-  const calendars = await client.fetchCalendars();
-
-  if (calendars.length === 0) {
-    throw new Error('No calendars found for the user.');
-  }
+  const { client, calendar } = await getPrimaryCalendar();
 
   const eventData: ICalInput = {
     title,
@@ -58,7 +73,7 @@ const createEvent = async ({
   const iCalString = generateICal(eventData);
 
   await client.createCalendarObject({
-    calendar: calendars[0],
+    calendar,
     filename: `${Date.now()}.ics`,
     iCalString,
   });
@@ -67,14 +82,38 @@ const createEvent = async ({
 };
 
 const listEvents = async () => {
-  const client = await getAuthenticatedClient();
-  const calendars = await client.fetchCalendars();
-  if (calendars.length === 0) return [];
-
-  const events = await client.fetchCalendarObjects({
-    calendar: calendars[0],
-  });
-  return events || [];
+  try {
+    const { client, calendar } = await getPrimaryCalendar();
+    const events = await client.fetchCalendarObjects({ calendar });
+    return events || [];
+  } catch {
+    // Return empty array if no calendars found
+    return [];
+  }
 };
 
-export { createEvent, listEvents };
+const getEventsInRange = async (
+  start: Date,
+  end: Date,
+): Promise<CalendarEvent[]> => {
+  try {
+    const { client, calendar } = await getPrimaryCalendar();
+
+    const events = await client.fetchCalendarObjects({
+      calendar,
+      timeRange: {
+        start: start.toISOString(),
+        end: end.toISOString(),
+      },
+    });
+
+    if (!events?.length) return [];
+
+    return parseCalendarObjects(events);
+  } catch {
+    // Return empty array if no calendars found
+    return [];
+  }
+};
+
+export { createEvent, listEvents, getEventsInRange };
