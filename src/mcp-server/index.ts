@@ -10,7 +10,6 @@ import {
   calculateAbsoluteDateFromWallClock,
   calculateEndDate,
   getWallClockNow,
-  type Weekday,
 } from '@/utils/relativeDateCalculator';
 import {
   formatEventList,
@@ -23,6 +22,22 @@ import {
   GET_EVENTS_IN_TIME_SLOT_DESCRIPTION,
 } from '@/utils/relativeDateRules';
 
+// ------------------- Type Definitions -------------------
+/** Input type for createEvent tool */
+type CreateEventInput = z.infer<typeof createEventInputSchema>;
+
+/** Input type for getEventsInTimeSlot tool */
+type TimeSlotInput = z.infer<typeof timeSlotInputSchema>;
+
+// Build schemas with proper typing
+const createEventInputSchema = z.object(relativeTimeInputSchema).extend({
+  title: z.string().describe('Short title of the event'),
+  description: z.string().optional().describe('Optional detailed description'),
+  location: z.string().optional().describe('Optional location of the event'),
+});
+
+const timeSlotInputSchema = z.object(relativeTimeInputSchema);
+
 // ------------------- MCP Server -------------------
 const mcpServer = new McpServer({ name: 'calendar-server', version: '1.0.0' });
 
@@ -32,28 +47,20 @@ mcpServer.registerTool(
   {
     title: 'Create Event',
     description: CREATE_EVENT_DESCRIPTION,
-    inputSchema: z.object(relativeTimeInputSchema).extend({
-      title: z.string().describe('Short title of the event'),
-      description: z
-        .string()
-        .optional()
-        .describe('Optional detailed description'),
-      location: z
-        .string()
-        .optional()
-        .describe('Optional location of the event'),
-    }),
+    inputSchema: createEventInputSchema,
   },
-  async ({
-    title,
-    weekOffset,
-    weekday,
-    time,
-    durationMinutes,
-    description,
-    location,
-    timezone,
-  }) => {
+  async (input: CreateEventInput) => {
+    const {
+      title,
+      weekOffset,
+      weekday,
+      time,
+      durationMinutes,
+      description,
+      location,
+      timezone,
+    } = input;
+
     try {
       // Calculate absolute dates in TypeScript - NOT by LLM
       // Use wall-clock time for correct timezone handling
@@ -61,7 +68,7 @@ mcpServer.registerTool(
       const wallClockNow = getWallClockNow(effectiveTimezone);
       const startDate = calculateAbsoluteDateFromWallClock(wallClockNow, {
         weekOffset,
-        weekday: weekday as Weekday,
+        weekday,
         time,
       });
       const endDate = calculateEndDate(startDate, durationMinutes);
@@ -119,16 +126,18 @@ mcpServer.registerTool(
   {
     title: 'Get Events In Time Slot',
     description: GET_EVENTS_IN_TIME_SLOT_DESCRIPTION,
-    inputSchema: z.object(relativeTimeInputSchema),
+    inputSchema: timeSlotInputSchema,
   },
-  async ({ weekOffset, weekday, time, durationMinutes, timezone }) => {
+  async (input: TimeSlotInput) => {
+    const { weekOffset, weekday, time, durationMinutes, timezone } = input;
+
     try {
       // Use wall-clock time for correct timezone handling
       const effectiveTimezone = timezone ?? DEFAULT_TIMEZONE;
       const wallClockNow = getWallClockNow(effectiveTimezone);
       const slotStart = calculateAbsoluteDateFromWallClock(wallClockNow, {
         weekOffset,
-        weekday: weekday as Weekday,
+        weekday,
         time,
       });
       const slotEnd = calculateEndDate(slotStart, durationMinutes);
