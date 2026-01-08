@@ -25,7 +25,7 @@ app.use(
 app.use(cors());
 app.use(express.json());
 
-// serve public folder for apidoc
+// serve public folder for static files
 app.use(express.static('public'));
 
 app.use('/api/v1', api);

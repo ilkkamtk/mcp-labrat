@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice MCP Calendar Demo</title>
+    <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+    <div class="container">
+        <div class="card">
+            <header class="header">
+                <div>
+                    <h1 class="title">Voice MCP Calendar Demo</h1>
+                    <p class="subtitle">Record a voice command, send it to the backend, and read/hear the MCP response.</p>
+                </div>
+                <div class="badge">Local demo</div>
+            </header>
+
+            <main class="content">
+                <div class="controls">
+                    <button id="start" class="btn btn--primary">Start Recording</button>
+                    <button id="send" class="btn">Send</button>
+                    <span class="hint">Allow microphone access when prompted.</span>
+                </div>
+
+                <pre id="output" class="output" aria-live="polite"></pre>
+            </main>
+
+            <footer class="footer">
+                <span>Tip: Speak naturally (Finnish works).</span>
+            </footer>
+        </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+</body>
+
+</html>
