@@ -29,7 +29,7 @@ mcpServer.registerTool(
     title: 'Create Event',
     description: `Create a new calendar event using RELATIVE date specification.
 IMPORTANT: Do NOT compute absolute dates. Provide relative date info only.
-- weekOffset: 0 = this week, 1 = next week, 2 = week after next, etc.
+- weekOffset: 0 = this week, 1 = next week, -1 = last week, -2 = two weeks ago, etc.
 - weekday: The target day of the week (monday-sunday)
 - time: Time in HH:mm format (24-hour)
 - durationMinutes: Optional duration, defaults to 60 minutes
@@ -37,7 +37,8 @@ IMPORTANT: Do NOT compute absolute dates. Provide relative date info only.
 Examples:
 - "next Monday" = weekOffset: 1, weekday: "monday"
 - "this Friday" = weekOffset: 0, weekday: "friday"
-- "two weeks from now on Tuesday" = weekOffset: 2, weekday: "tuesday"`,
+- "two weeks from now on Tuesday" = weekOffset: 2, weekday: "tuesday"
+- "last Wednesday" = weekOffset: -1, weekday: "wednesday"`,
     inputSchema: z.object(relativeTimeInputSchema).extend({
       title: z.string().describe('Short title of the event'),
       description: z
@@ -126,7 +127,8 @@ mcpServer.registerTool(
     title: 'Get Events In Time Slot',
     description: `Get all events within a specific time slot.
 Use this tool to check what events exist in a given time range.
-Provide relative date parameters to specify the time slot.`,
+Provide relative date parameters to specify the time slot.
+weekOffset can be negative for past weeks (e.g., -1 = last week).`,
     inputSchema: z.object(relativeTimeInputSchema),
   },
   async ({ weekOffset, weekday, time, durationMinutes, timezone }) => {

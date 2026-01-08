@@ -32,7 +32,8 @@ export type CalendarEvent = {
  * Handles both UTC (ending with Z) and floating local time formats.
  *
  * Note: TZID parameters and numeric offsets (e.g., +0200) are not currently
- * supported and will be logged as warnings.
+ * fully supported - the timezone/offset info is stripped and DEFAULT_TIMEZONE
+ * is used for the resulting time. A warning is logged when this occurs.
  *
  * @param icalDate - The iCal date string to parse
  * @param logger - Optional logger for warnings. Defaults to console.warn.
@@ -43,18 +44,38 @@ const parseIcsDate = (
 ): Date | null => {
   if (!icalDate) return null;
 
-  // Detect unsupported formats and log warning
-  if (icalDate.includes('TZID=') || /[+-]\d{4}$/.test(icalDate)) {
+  let dateStr = icalDate;
+  let hasTzInfo = false;
+
+  // Handle TZID format: "TZID=Europe/Helsinki:20250101T120000"
+  // Strip the TZID prefix and use the date portion
+  if (icalDate.includes('TZID=')) {
+    const colonIndex = icalDate.indexOf(':');
+    if (colonIndex !== -1) {
+      dateStr = icalDate.substring(colonIndex + 1);
+      hasTzInfo = true;
+    }
+  }
+
+  // Handle numeric offset format: "20250101T120000+0200" or "20250101T120000-0500"
+  // Strip the offset and parse the local time portion
+  const offsetMatch = dateStr.match(/^(.+?)([+-]\d{4})$/);
+  if (offsetMatch) {
+    dateStr = offsetMatch[1];
+    hasTzInfo = true;
+  }
+
+  if (hasTzInfo) {
     logger.warn(
-      `[parseIcsDate] Unsupported date format (TZID or offset): "${icalDate}". ` +
-        `Falling back to DEFAULT_TIMEZONE. Consider extending parser if needed.`,
+      `[parseIcsDate] Date contains TZID or offset: "${icalDate}". ` +
+        `Stripping timezone info and using DEFAULT_TIMEZONE. Full TZ support not implemented.`,
     );
   }
 
-  const isUTC = icalDate.endsWith('Z');
+  const isUTC = dateStr.endsWith('Z');
 
   // Match iCal date format: YYYYMMDD or YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSSZ
-  const match = icalDate.match(
+  const match = dateStr.match(
     /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?Z?$/,
   );
   if (!match) {
