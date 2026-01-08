@@ -7,6 +7,7 @@ import {
 } from 'openai/resources/index';
 import { getCurrentDateInfo } from '@/utils/relativeDateCalculator';
 import { DEFAULT_TIMEZONE } from '@/utils/weekday';
+import { SYSTEM_PROMPT_DATE_RULES } from '@/utils/relativeDateRules';
 
 type RunPromptResponse = {
   answer: string;
@@ -45,33 +46,7 @@ You are a specialized assistant with access to specific MCP tools.
 
 ${dateInfo}
 
-CRITICAL DATE RULES - READ CAREFULLY:
-1. You must NEVER compute or output absolute dates (like 2026-01-12 or ISO timestamps).
-2. For calendar events, you MUST provide ONLY relative date information:
-   - weekOffset: number (0 = this week, 1 = next week, 2 = two weeks from now, etc.)
-   - weekday: string (monday, tuesday, wednesday, thursday, friday, saturday, sunday)
-   - time: string in HH:mm format (24-hour)
-
-3. Week definition (ISO-8601):
-   - Week starts on MONDAY (weekday 1)
-   - Week ends on SUNDAY (weekday 7)
-   - "This week" means the current Mon-Sun period
-   - "Next week" means the NEXT Mon-Sun period (weekOffset: 1)
-
-4. Special case - "tomorrow":
-   - Calculate weekOffset and weekday based on what day tomorrow actually is
-   - If today is Thursday, tomorrow is Friday → weekOffset: 0, weekday: "friday"
-   - If today is Saturday, tomorrow is Sunday → weekOffset: 0, weekday: "sunday"
-   - If today is Sunday, tomorrow is Monday → weekOffset: 1, weekday: "monday"
-
-5. Examples of correct interpretation:
-   - "next Monday" → weekOffset: 1, weekday: "monday"
-   - "next Friday" → weekOffset: 1, weekday: "friday"
-   - "this Friday" → weekOffset: 0, weekday: "friday"
-   - "two weeks from now on Tuesday" → weekOffset: 2, weekday: "tuesday"
-   - "tomorrow" when today is Thursday → weekOffset: 0, weekday: "friday"
-
-6. The server will calculate the actual date. Your job is ONLY to extract the relative intent.
+${SYSTEM_PROMPT_DATE_RULES}
 
 WORKFLOW FOR CREATING EVENTS WITH AVAILABILITY CHECK:
 When the user asks to create an event "if the time is free" or similar:

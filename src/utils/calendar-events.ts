@@ -29,11 +29,8 @@ export type CalendarEvent = {
 
 /**
  * Parse iCal date string to Date object using luxon.
- * Handles both UTC (ending with Z) and floating local time formats.
- *
- * Note: TZID parameters and numeric offsets (e.g., +0200) are not currently
- * fully supported - the timezone/offset info is stripped and DEFAULT_TIMEZONE
- * is used for the resulting time. A warning is logged when this occurs.
+ * Handles UTC (ending with Z), floating local time, TZID parameters,
+ * and numeric offsets (e.g., +0200).
  *
  * @param icalDate - The iCal date string to parse
  * @param logger - Optional logger for warnings. Defaults to console.warn.
@@ -45,31 +42,37 @@ const parseIcsDate = (
   if (!icalDate) return null;
 
   let dateStr = icalDate;
-  let hasTzInfo = false;
+  let timezone: string | null = null;
+  let offsetMinutes: number | null = null;
 
   // Handle TZID format: "TZID=Europe/Helsinki:20250101T120000"
-  // Strip the TZID prefix and use the date portion
+  // Extract and honor the specified timezone
   if (icalDate.includes('TZID=')) {
-    const colonIndex = icalDate.indexOf(':');
-    if (colonIndex !== -1) {
-      dateStr = icalDate.substring(colonIndex + 1);
-      hasTzInfo = true;
+    const tzMatch = icalDate.match(/TZID=([^:]+):(.+)/);
+    if (tzMatch) {
+      const [, tz, date] = tzMatch;
+      // Validate the timezone with luxon
+      const testDt = DateTime.local().setZone(tz);
+      if (testDt.isValid) {
+        timezone = tz;
+        dateStr = date;
+      } else {
+        logger.warn(
+          `[parseIcsDate] Invalid TZID "${tz}" in "${icalDate}". Using DEFAULT_TIMEZONE.`,
+        );
+        dateStr = date;
+      }
     }
   }
 
   // Handle numeric offset format: "20250101T120000+0200" or "20250101T120000-0500"
-  // Strip the offset and parse the local time portion
-  const offsetMatch = dateStr.match(/^(.+?)([+-]\d{4})$/);
+  // Parse the offset and convert to minutes
+  const offsetMatch = dateStr.match(/^(.+?)([+-])(\d{2})(\d{2})$/);
   if (offsetMatch) {
-    dateStr = offsetMatch[1];
-    hasTzInfo = true;
-  }
-
-  if (hasTzInfo) {
-    logger.warn(
-      `[parseIcsDate] Date contains TZID or offset: "${icalDate}". ` +
-        `Stripping timezone info and using DEFAULT_TIMEZONE. Full TZ support not implemented.`,
-    );
+    const [, date, sign, hours, minutes] = offsetMatch;
+    dateStr = date;
+    offsetMinutes =
+      (parseInt(hours) * 60 + parseInt(minutes)) * (sign === '-' ? -1 : 1);
   }
 
   const isUTC = dateStr.endsWith('Z');
@@ -87,6 +90,22 @@ const parseIcsDate = (
 
   const [, year, month, day, hour, minute, second] = match;
 
+  // Determine the zone to use:
+  // 1. If UTC suffix (Z), use UTC
+  // 2. If TZID was specified and valid, use that timezone
+  // 3. If numeric offset, use fixed offset zone
+  // 4. Otherwise, use DEFAULT_TIMEZONE (floating time)
+  let zone: string;
+  if (isUTC) {
+    zone = 'utc';
+  } else if (timezone) {
+    zone = timezone;
+  } else if (offsetMinutes !== null) {
+    zone = `UTC${offsetMinutes >= 0 ? '+' : ''}${Math.floor(offsetMinutes / 60)}:${String(Math.abs(offsetMinutes % 60)).padStart(2, '0')}`;
+  } else {
+    zone = DEFAULT_TIMEZONE;
+  }
+
   const dt = DateTime.fromObject(
     {
       year: parseInt(year),
@@ -96,7 +115,7 @@ const parseIcsDate = (
       minute: minute ? parseInt(minute) : 0,
       second: second ? parseInt(second) : 0,
     },
-    { zone: isUTC ? 'utc' : DEFAULT_TIMEZONE },
+    { zone },
   );
 
   return dt.isValid ? dt.toJSDate() : null;
