@@ -25,38 +25,13 @@ export type RelativeDateInput = {
 };
 
 /**
- * Parse time string in HH:mm format.
+ * Parse time string in HH:mm format using Luxon.
  * @returns Parsed hours and minutes, or null if invalid format
  */
 const parseHHmm = (time: string): { hours: number; minutes: number } | null => {
-  const [h, m] = time.split(':');
-  const hours = Number(h);
-  const minutes = Number(m);
-
-  if (
-    Number.isNaN(hours) ||
-    Number.isNaN(minutes) ||
-    hours < 0 ||
-    hours > 23 ||
-    minutes < 0 ||
-    minutes > 59
-  ) {
-    return null;
-  }
-
-  return { hours, minutes };
-};
-
-/**
- * Resolve weekday string to ISO weekday number.
- * @throws Error if weekday is invalid
- */
-const resolveTargetISOWeekday = (weekday: Weekday): number => {
-  const isoWeekday = WEEKDAY_TO_ISO[weekday];
-  if (!isoWeekday) {
-    throw new Error(`Invalid weekday: "${weekday}".`);
-  }
-  return isoWeekday;
+  const dt = DateTime.fromFormat(time, 'HH:mm');
+  if (!dt.isValid) return null;
+  return { hours: dt.hour, minutes: dt.minute };
 };
 
 /**
@@ -81,23 +56,6 @@ export const getWallClockNow = (
 };
 
 /**
- * Convert a wall-clock DateTime to a UTC JS Date.
- *
- * @param wallClock - Luxon DateTime in the target timezone
- * @returns Date representing the correct UTC instant
- * @throws Error if the DateTime is invalid
- */
-export const wallClockToUTC = (wallClock: DateTime): Date => {
-  if (!wallClock.isValid) {
-    throw new Error(
-      `Invalid wall-clock DateTime: ${wallClock.invalidReason ?? 'unknown reason'}`,
-    );
-  }
-
-  return wallClock.toUTC().toJSDate();
-};
-
-/**
  * Calculate absolute date from relative date input.
  * Works with Luxon DateTime internally and returns a proper UTC Date.
  *
@@ -111,7 +69,7 @@ export const calculateAbsoluteDateFromWallClock = (
 ): Date => {
   const { weekOffset, weekday, time } = input;
 
-  // Validate and parse time
+  // Validate and parse time using Luxon
   const parsedTime = parseHHmm(time);
   if (!parsedTime) {
     throw new Error(
@@ -120,8 +78,11 @@ export const calculateAbsoluteDateFromWallClock = (
   }
   const { hours, minutes } = parsedTime;
 
-  // Get target ISO weekday (1-7)
-  const targetISOWeekday = resolveTargetISOWeekday(weekday);
+  // Get target ISO weekday (1-7) with inline validation
+  const targetISOWeekday = WEEKDAY_TO_ISO[weekday];
+  if (!targetISOWeekday) {
+    throw new Error(`Invalid weekday: "${weekday}".`);
+  }
 
   // Luxon's weekday property is already ISO (1=Monday, 7=Sunday)
   const currentISOWeekday = wallClockNow.weekday;
@@ -137,7 +98,14 @@ export const calculateAbsoluteDateFromWallClock = (
     .plus({ days: totalDaysOffset })
     .set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
 
-  return wallClockToUTC(targetWallClock);
+  // Validate and convert to UTC
+  if (!targetWallClock.isValid) {
+    throw new Error(
+      `Invalid target DateTime: ${targetWallClock.invalidReason ?? 'unknown reason'}`,
+    );
+  }
+
+  return targetWallClock.toUTC().toJSDate();
 };
 
 /**

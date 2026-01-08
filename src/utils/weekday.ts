@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DateTime } from 'luxon';
 
 /**
  * Shared weekday definitions.
@@ -52,3 +53,55 @@ export const ISO_TO_WEEKDAY: Record<number, Weekday> = {
 
 /** Default timezone used when none is specified */
 export const DEFAULT_TIMEZONE = 'Europe/Helsinki';
+
+/**
+ * Zod schema that validates a required IANA timezone string.
+ * Returns 'Invalid timezone' error for invalid identifiers.
+ */
+export const timezoneSchema = z
+  .string()
+  .refine((tz) => DateTime.local().setZone(tz).isValid, {
+    message:
+      'Invalid timezone. Expected a valid IANA timezone identifier, e.g. "Europe/Helsinki".',
+  });
+
+/**
+ * Zod schema that validates an optional IANA timezone string.
+ * Used in MCP tool inputs where timezone defaults to DEFAULT_TIMEZONE.
+ */
+export const optionalTimezoneSchema = z
+  .string()
+  .optional()
+  .refine((tz) => !tz || DateTime.local().setZone(tz).isValid, {
+    message:
+      'Invalid timezone. Expected a valid IANA timezone identifier, e.g. "Europe/Helsinki".',
+  });
+
+/**
+ * Shared Zod schema for relative time input fields.
+ * Used by createEvent and getEventsInTimeSlot MCP tools.
+ */
+export const relativeTimeInputSchema = {
+  weekOffset: z
+    .number()
+    .int()
+    .describe(
+      'Week offset from current week. 0 = this week, 1 = next week, -1 = last week, etc.',
+    ),
+  weekday: weekdaySchema.describe(
+    'Target weekday (monday, tuesday, wednesday, thursday, friday, saturday, sunday)',
+  ),
+  time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .describe('Time in HH:mm format (24-hour), e.g., "15:00"'),
+  durationMinutes: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Duration in minutes. Defaults to 60 if not specified'),
+  timezone: optionalTimezoneSchema.describe(
+    'IANA timezone (e.g., "Europe/Helsinki"). Defaults to Europe/Helsinki if not specified.',
+  ),
+};

@@ -17,7 +17,7 @@ import {
   formatDateTime,
   formatTime,
 } from '@/utils/eventFormatting';
-import { weekdaySchema, DEFAULT_TIMEZONE } from '@/utils/weekday';
+import { relativeTimeInputSchema, DEFAULT_TIMEZONE } from '@/utils/weekday';
 
 // ------------------- MCP Server -------------------
 const mcpServer = new McpServer({ name: 'calendar-server', version: '1.0.0' });
@@ -40,25 +40,7 @@ Examples:
 - "two weeks from now on Tuesday" = weekOffset: 2, weekday: "tuesday"`,
     inputSchema: z.object({
       title: z.string().describe('Short title of the event'),
-      weekOffset: z
-        .number()
-        .int()
-        .describe(
-          'Week offset from current week. 0 = this week, 1 = next week, -1 = last week, etc.',
-        ),
-      weekday: weekdaySchema.describe(
-        'Target weekday (monday, tuesday, wednesday, thursday, friday, saturday, sunday)',
-      ),
-      time: z
-        .string()
-        .regex(/^\d{2}:\d{2}$/)
-        .describe('Time in HH:mm format (24-hour), e.g., "15:00"'),
-      durationMinutes: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe('Event duration in minutes. Defaults to 60 if not specified'),
+      ...relativeTimeInputSchema,
       description: z
         .string()
         .optional()
@@ -67,12 +49,6 @@ Examples:
         .string()
         .optional()
         .describe('Optional location of the event'),
-      timezone: z
-        .string()
-        .optional()
-        .describe(
-          'IANA timezone (e.g., "Europe/Helsinki"). Defaults to Europe/Helsinki if not specified.',
-        ),
     }),
   },
   async ({
@@ -132,15 +108,14 @@ mcpServer.registerTool(
   async () => {
     const rawEvents = await listEvents();
     const events = parseCalendarObjects(rawEvents);
-    const eventList = formatEventList(events, 'No events found.');
+
+    const text =
+      events.length === 0
+        ? 'No events found.'
+        : `Found ${events.length} event(s):\n${formatEventList(events)}`;
 
     return {
-      content: [
-        {
-          type: 'text',
-          text: `Found ${events.length} events:\n${eventList}`,
-        },
-      ],
+      content: [{ type: 'text', text }],
       structuredContent: { events },
     };
   },
@@ -153,33 +128,7 @@ mcpServer.registerTool(
     description: `Get all events within a specific time slot.
 Use this tool to check what events exist in a given time range.
 Provide relative date parameters to specify the time slot.`,
-    inputSchema: z.object({
-      weekOffset: z
-        .number()
-        .int()
-        .describe(
-          'Week offset from current week. 0 = this week, 1 = next week, -1 = last week, etc.',
-        ),
-      weekday: weekdaySchema.describe(
-        'Target weekday (monday, tuesday, wednesday, thursday, friday, saturday, sunday)',
-      ),
-      time: z
-        .string()
-        .regex(/^\d{2}:\d{2}$/)
-        .describe('Start time in HH:mm format (24-hour), e.g., "15:00"'),
-      durationMinutes: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe('Duration in minutes. Defaults to 60'),
-      timezone: z
-        .string()
-        .optional()
-        .describe(
-          'IANA timezone (e.g., "Europe/Helsinki"). Defaults to Europe/Helsinki if not specified.',
-        ),
-    }),
+    inputSchema: z.object(relativeTimeInputSchema),
   },
   async ({ weekOffset, weekday, time, durationMinutes, timezone }) => {
     try {

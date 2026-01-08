@@ -17,9 +17,20 @@ export type CalendarEvent = {
 /**
  * Parse iCal date string to Date object using luxon.
  * Handles both UTC (ending with Z) and floating local time formats.
+ *
+ * Note: TZID parameters and numeric offsets (e.g., +0200) are not currently
+ * supported and will be logged as warnings.
  */
 const parseIcsDate = (icalDate?: string): Date | null => {
   if (!icalDate) return null;
+
+  // Detect unsupported formats and log warning
+  if (icalDate.includes('TZID=') || /[+-]\d{4}$/.test(icalDate)) {
+    console.warn(
+      `[parseIcsDate] Unsupported date format (TZID or offset): "${icalDate}". ` +
+        `Falling back to DEFAULT_TIMEZONE. Consider extending parser if needed.`,
+    );
+  }
 
   const isUTC = icalDate.endsWith('Z');
 
@@ -27,7 +38,12 @@ const parseIcsDate = (icalDate?: string): Date | null => {
   const match = icalDate.match(
     /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?Z?$/,
   );
-  if (!match) return null;
+  if (!match) {
+    console.warn(
+      `[parseIcsDate] Unable to parse date: "${icalDate}". Returning null.`,
+    );
+    return null;
+  }
 
   const [, year, month, day, hour, minute, second] = match;
 
