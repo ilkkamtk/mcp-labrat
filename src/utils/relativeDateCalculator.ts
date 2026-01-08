@@ -129,13 +129,17 @@ export const calculateAbsoluteDate = (
 /**
  * Calculate end date based on start date and optional duration.
  * Default duration is 60 minutes.
+ *
+ * @param startDate - Start date of the event
+ * @param durationMinutes - Duration in minutes. Defaults to 60 if undefined.
  */
 export const calculateEndDate = (
   startDate: Date,
-  durationMinutes: number = 60,
+  durationMinutes?: number,
 ): Date => {
+  const effectiveDuration = durationMinutes ?? 60;
   return DateTime.fromJSDate(startDate)
-    .plus({ minutes: durationMinutes })
+    .plus({ minutes: effectiveDuration })
     .toJSDate();
 };
 

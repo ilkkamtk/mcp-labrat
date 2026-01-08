@@ -38,9 +38,8 @@ Examples:
 - "next Monday" = weekOffset: 1, weekday: "monday"
 - "this Friday" = weekOffset: 0, weekday: "friday"
 - "two weeks from now on Tuesday" = weekOffset: 2, weekday: "tuesday"`,
-    inputSchema: z.object({
+    inputSchema: z.object(relativeTimeInputSchema).extend({
       title: z.string().describe('Short title of the event'),
-      ...relativeTimeInputSchema,
       description: z
         .string()
         .optional()

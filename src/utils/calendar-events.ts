@@ -3,6 +3,19 @@ import { icsToJson } from '@/utils/icsToJson';
 import { DEFAULT_TIMEZONE } from '@/utils/weekday';
 
 /**
+ * Logger interface for ICS parsing warnings.
+ * Allows callers to plug in structured logging if needed.
+ */
+export type IcsLogger = {
+  warn: (message: string) => void;
+};
+
+/** Default logger uses console.warn */
+const defaultLogger: IcsLogger = {
+  warn: (message: string) => console.warn(message),
+};
+
+/**
  * Calendar event data model with raw Date objects.
  * Formatting is done at the presentation layer (MCP server).
  */
@@ -20,13 +33,19 @@ export type CalendarEvent = {
  *
  * Note: TZID parameters and numeric offsets (e.g., +0200) are not currently
  * supported and will be logged as warnings.
+ *
+ * @param icalDate - The iCal date string to parse
+ * @param logger - Optional logger for warnings. Defaults to console.warn.
  */
-const parseIcsDate = (icalDate?: string): Date | null => {
+const parseIcsDate = (
+  icalDate?: string,
+  logger: IcsLogger = defaultLogger,
+): Date | null => {
   if (!icalDate) return null;
 
   // Detect unsupported formats and log warning
   if (icalDate.includes('TZID=') || /[+-]\d{4}$/.test(icalDate)) {
-    console.warn(
+    logger.warn(
       `[parseIcsDate] Unsupported date format (TZID or offset): "${icalDate}". ` +
         `Falling back to DEFAULT_TIMEZONE. Consider extending parser if needed.`,
     );
@@ -39,7 +58,7 @@ const parseIcsDate = (icalDate?: string): Date | null => {
     /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?Z?$/,
   );
   if (!match) {
-    console.warn(
+    logger.warn(
       `[parseIcsDate] Unable to parse date: "${icalDate}". Returning null.`,
     );
     return null;
@@ -65,13 +84,19 @@ const parseIcsDate = (icalDate?: string): Date | null => {
 /**
  * Map raw ICS string to CalendarEvent array.
  * Centralizes iCal → CalendarEvent transformation.
+ *
+ * @param ics - Raw ICS string content
+ * @param logger - Optional logger for parsing warnings. Defaults to console.warn.
  */
-export const mapIcsToCalendarEvents = (ics: string): CalendarEvent[] => {
+export const mapIcsToCalendarEvents = (
+  ics: string,
+  logger: IcsLogger = defaultLogger,
+): CalendarEvent[] => {
   const parsed = icsToJson(ics);
   return parsed.map((evt) => ({
     title: evt.summary || 'Untitled',
-    start: parseIcsDate(evt.startDate),
-    end: parseIcsDate(evt.endDate),
+    start: parseIcsDate(evt.startDate, logger),
+    end: parseIcsDate(evt.endDate, logger),
     location: evt.location || null,
     description: evt.description || null,
   }));
@@ -80,11 +105,15 @@ export const mapIcsToCalendarEvents = (ics: string): CalendarEvent[] => {
 /**
  * Parse raw CalDAV calendar objects into CalendarEvent array.
  * Shared helper to ensure consistent parsing across all event retrieval methods.
+ *
+ * @param calendarObjects - Raw CalDAV calendar objects with ICS data
+ * @param logger - Optional logger for parsing warnings. Defaults to console.warn.
  */
 export const parseCalendarObjects = (
   calendarObjects: Array<{ data?: string }>,
+  logger: IcsLogger = defaultLogger,
 ): CalendarEvent[] => {
   return calendarObjects
     .filter((obj) => obj.data)
-    .flatMap((obj) => mapIcsToCalendarEvents(obj.data!));
+    .flatMap((obj) => mapIcsToCalendarEvents(obj.data!, logger));
 };

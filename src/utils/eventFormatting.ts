@@ -2,6 +2,9 @@ import { DateTime } from 'luxon';
 import type { CalendarEvent } from '@/utils/calendar-events';
 import { DEFAULT_TIMEZONE } from '@/utils/weekday';
 
+/** Default locale for date/time formatting */
+export const DEFAULT_LOCALE = 'fi-FI';
+
 /**
  * Format a Date object as a readable string with weekday.
  * Output: "YYYY-MM-DD (Weekday) HH:mm" or "YYYY-MM-DD (Weekday)" for midnight.
@@ -83,7 +86,7 @@ const formatDateTime = (
 ): string => {
   const {
     timezone = DEFAULT_TIMEZONE,
-    locale = 'fi-FI',
+    locale = DEFAULT_LOCALE,
     includeWeekday = true,
     includeTime = true,
   } = options;
