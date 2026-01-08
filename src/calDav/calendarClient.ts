@@ -1,6 +1,6 @@
 import { generateICal, ICalInput } from '@/utils/ical-lib';
 import {
-  mapIcsToCalendarEvents,
+  parseCalendarObjects,
   type CalendarEvent,
 } from '@/utils/calendar-events';
 import { DAVClient } from 'tsdav';
@@ -99,9 +99,7 @@ const getEventsInRange = async (
 
   if (!events?.length) return [];
 
-  return events
-    .filter((calendarObject) => calendarObject.data)
-    .flatMap((calendarObject) => mapIcsToCalendarEvents(calendarObject.data!));
+  return parseCalendarObjects(events);
 };
 
 export { createEvent, listEvents, getEventsInRange };

@@ -7,9 +7,9 @@ import {
 } from '@/calDav/calendarClient';
 import { parseCalendarObjects } from '@/utils/calendar-events';
 import {
-  calculateAbsoluteDate,
+  calculateAbsoluteDateFromWallClock,
   calculateEndDate,
-  getNow,
+  getWallClockNow,
   type Weekday,
 } from '@/utils/relativeDateCalculator';
 import {
@@ -17,7 +17,7 @@ import {
   formatDateTime,
   formatTime,
 } from '@/utils/eventFormatting';
-import { weekdaySchema } from '@/utils/weekday';
+import { weekdaySchema, DEFAULT_TIMEZONE } from '@/utils/weekday';
 
 // ------------------- MCP Server -------------------
 const mcpServer = new McpServer({ name: 'calendar-server', version: '1.0.0' });
@@ -44,7 +44,7 @@ Examples:
         .number()
         .int()
         .describe(
-          'Week offset from current week. 0 = this week, 1 = next week, etc.',
+          'Week offset from current week. 0 = this week, 1 = next week, -1 = last week, etc.',
         ),
       weekday: weekdaySchema.describe(
         'Target weekday (monday, tuesday, wednesday, thursday, friday, saturday, sunday)',
@@ -87,8 +87,9 @@ Examples:
   }) => {
     try {
       // Calculate absolute dates in TypeScript - NOT by LLM
-      const now = getNow(timezone);
-      const startDate = calculateAbsoluteDate(now, {
+      // Use wall-clock time for correct timezone handling
+      const wallClockNow = getWallClockNow(timezone ?? DEFAULT_TIMEZONE);
+      const startDate = calculateAbsoluteDateFromWallClock(wallClockNow, {
         weekOffset,
         weekday: weekday as Weekday,
         time,
@@ -156,7 +157,7 @@ Provide relative date parameters to specify the time slot.`,
         .number()
         .int()
         .describe(
-          'Week offset from current week. 0 = this week, 1 = next week, etc.',
+          'Week offset from current week. 0 = this week, 1 = next week, -1 = last week, etc.',
         ),
       weekday: weekdaySchema.describe(
         'Target weekday (monday, tuesday, wednesday, thursday, friday, saturday, sunday)',
@@ -181,8 +182,9 @@ Provide relative date parameters to specify the time slot.`,
   },
   async ({ weekOffset, weekday, time, durationMinutes, timezone }) => {
     try {
-      const now = getNow(timezone);
-      const slotStart = calculateAbsoluteDate(now, {
+      // Use wall-clock time for correct timezone handling
+      const wallClockNow = getWallClockNow(timezone ?? DEFAULT_TIMEZONE);
+      const slotStart = calculateAbsoluteDateFromWallClock(wallClockNow, {
         weekOffset,
         weekday: weekday as Weekday,
         time,

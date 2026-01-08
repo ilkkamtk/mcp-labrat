@@ -2,10 +2,11 @@ import { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import CustomError from '@/classes/CustomError';
 import { runPromptWithMcpServer } from '@/mcp-client';
+import { DEFAULT_TIMEZONE } from '@/utils/weekday';
 
 const BodySchema = z.object({
   prompt: z.string().min(1),
-  timezone: z.string().default('Europe/Helsinki'),
+  timezone: z.string().default(DEFAULT_TIMEZONE),
 });
 
 const postPrompt = async (req: Request, res: Response, next: NextFunction) => {
