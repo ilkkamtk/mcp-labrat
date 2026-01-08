@@ -41,10 +41,16 @@ const formatEvent = (
   const startStr = formatDate(event.start, timezone);
   const endStr = formatDate(event.end, timezone);
 
-  const timeRange =
-    endStr && endStr !== startStr
-      ? `${startStr} to ${endStr}`
-      : (startStr ?? 'No time');
+  let timeRange: string;
+  if (startStr && endStr) {
+    timeRange = startStr === endStr ? startStr : `${startStr} to ${endStr}`;
+  } else if (startStr) {
+    timeRange = startStr;
+  } else if (endStr) {
+    timeRange = endStr;
+  } else {
+    timeRange = 'No time';
+  }
 
   const location = event.location ? ` at ${event.location}` : '';
 

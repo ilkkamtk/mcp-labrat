@@ -94,6 +94,16 @@ export const relativeTimeInputSchema = {
   time: z
     .string()
     .regex(/^\d{2}:\d{2}$/)
+    .refine(
+      (time) => {
+        const [hour, minute] = time.split(':').map(Number);
+        return hour >= 0 && hour < 24 && minute >= 0 && minute < 60;
+      },
+      {
+        message:
+          'Invalid time value. Hour must be 00-23 and minute must be 00-59.',
+      },
+    )
     .describe('Time in HH:mm format (24-hour), e.g., "15:00"'),
   durationMinutes: z
     .number()
