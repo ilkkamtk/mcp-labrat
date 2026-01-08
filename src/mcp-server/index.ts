@@ -108,7 +108,7 @@ Examples:
         content: [
           {
             type: 'text',
-            text: `Successfully scheduled "${title}" for ${formatDateTime(eventStart)} (${weekday})`,
+            text: `Successfully scheduled "${title}" for ${formatDateTime(eventStart)}`,
           },
         ],
       };

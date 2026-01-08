@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon';
+
 export type ICalInput = {
   title: string;
   start: Date;
@@ -8,14 +10,19 @@ export type ICalInput = {
   domain?: string;
 };
 
+/**
+ * Escape special characters for iCal (RFC 5545) text values.
+ * - Backslash, comma, semicolon are escaped with backslash
+ * - Newlines are converted to literal \n
+ */
 const escapeText = (str: string): string =>
   str.replace(/[\\,;]/g, (match) => `\\${match}`).replace(/\n/g, '\\n');
 
+/**
+ * Format a Date as iCal UTC timestamp (YYYYMMDDTHHMMSSZ).
+ */
 const toCalDavUTC = (date: Date): string =>
-  date
-    .toISOString()
-    .replace(/[-:]/g, '')
-    .replace(/\.\d{3}Z$/, 'Z');
+  DateTime.fromJSDate(date).toUTC().toFormat("yyyyMMdd'T'HHmmss'Z'");
 
 const generateICal = (input: ICalInput): string => {
   const {

@@ -50,16 +50,5 @@ export const ISO_TO_WEEKDAY: Record<number, Weekday> = {
   7: 'sunday',
 };
 
-/** JavaScript weekday names (Sunday = 0) for display formatting */
-export const JS_WEEKDAY_NAMES = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-] as const;
-
 /** Default timezone used when none is specified */
 export const DEFAULT_TIMEZONE = 'Europe/Helsinki';

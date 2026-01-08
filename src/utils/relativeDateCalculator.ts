@@ -11,6 +11,7 @@
  * For storage/CalDAV, we convert to proper UTC instants using wallClockToUTC().
  */
 
+import { DateTime } from 'luxon';
 import {
   type Weekday,
   WEEKDAY_TO_ISO,
@@ -41,58 +42,96 @@ export type WallClockTime = {
 };
 
 /**
- * Get current wall-clock time in a specific timezone.
+ * Parse time string in HH:mm format.
+ * @returns Parsed hours and minutes, or null if invalid format
+ */
+const parseHHmm = (time: string): { hours: number; minutes: number } | null => {
+  const match = time.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return null;
+
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  return { hours, minutes };
+};
+
+/**
+ * Convert JavaScript's day (0=Sunday) to ISO weekday (1=Monday, 7=Sunday).
+ */
+const jsDayToISOWeekday = (jsDay: number): number => (jsDay === 0 ? 7 : jsDay);
+
+/**
+ * Resolve weekday string to ISO weekday number.
+ * @throws Error if weekday is invalid
+ */
+const resolveTargetISOWeekday = (weekday: Weekday): number => {
+  const isoWeekday = WEEKDAY_TO_ISO[weekday];
+  if (!isoWeekday) {
+    throw new Error(`Invalid weekday: "${weekday}".`);
+  }
+  return isoWeekday;
+};
+
+/**
+ * Get current wall-clock time in a specific timezone using luxon.
  * Returns a WallClockTime object that can be used for relative calculations
  * or converted to a UTC instant using wallClockToUTC().
  *
  * @param timezone - IANA timezone string (e.g., 'Europe/Helsinki'). Defaults to DEFAULT_TIMEZONE.
+ * @throws Error if timezone is invalid
  */
 export const getWallClockNow = (
   timezone: string = DEFAULT_TIMEZONE,
 ): WallClockTime => {
-  const nowStr = new Date().toLocaleString('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-  // Parse "YYYY-MM-DD, HH:mm:ss" format
-  const [datePart, timePart] = nowStr.split(', ');
-  const [year, month, day] = datePart.split('-').map(Number);
-  const [hour, minute, second] = timePart.split(':').map(Number);
+  const dt = DateTime.now().setZone(timezone);
 
-  return { year, month, day, hour, minute, second, timezone };
+  if (!dt.isValid) {
+    throw new Error(`Invalid timezone: "${timezone}".`);
+  }
+
+  return {
+    year: dt.year,
+    month: dt.month,
+    day: dt.day,
+    hour: dt.hour,
+    minute: dt.minute,
+    second: dt.second,
+    timezone,
+  };
 };
 
 /**
- * Convert a wall-clock time in a specific timezone to a proper UTC Date.
- * This correctly handles timezone offsets so the Date represents the actual instant.
+ * Convert a wall-clock time in a specific timezone to a proper UTC Date using luxon.
+ * This correctly handles timezone offsets and DST transitions.
  *
  * @param wallClock - Wall-clock time to convert
  * @returns Date representing the correct UTC instant
+ * @throws Error if the wall-clock time is invalid
  */
 export const wallClockToUTC = (wallClock: WallClockTime): Date => {
-  // Create a date string in ISO format and use the timezone to get the correct UTC instant
-  // We format as if it were UTC, then find the offset by comparing with the actual timezone
-  const isoString = `${wallClock.year}-${String(wallClock.month).padStart(2, '0')}-${String(wallClock.day).padStart(2, '0')}T${String(wallClock.hour).padStart(2, '0')}:${String(wallClock.minute).padStart(2, '0')}:${String(wallClock.second).padStart(2, '0')}`;
-
-  // Create a date assuming UTC
-  const asUTC = new Date(isoString + 'Z');
-
-  // Get what time that UTC instant represents in the target timezone
-  const inTargetTz = new Date(
-    asUTC.toLocaleString('en-US', { timeZone: wallClock.timezone }),
+  const dt = DateTime.fromObject(
+    {
+      year: wallClock.year,
+      month: wallClock.month,
+      day: wallClock.day,
+      hour: wallClock.hour,
+      minute: wallClock.minute,
+      second: wallClock.second,
+    },
+    { zone: wallClock.timezone },
   );
 
-  // Calculate the offset in milliseconds
-  const offsetMs = inTargetTz.getTime() - asUTC.getTime();
+  if (!dt.isValid) {
+    throw new Error(
+      `Invalid wall-clock time: ${JSON.stringify(wallClock)}. Reason: ${dt.invalidReason}`,
+    );
+  }
 
-  // The correct UTC instant is the wall-clock time minus the offset
-  return new Date(asUTC.getTime() - offsetMs);
+  return dt.toJSDate();
 };
 
 /**
@@ -106,8 +145,7 @@ const getISOWeekdayFromWallClock = (wallClock: WallClockTime): number => {
     wallClock.month - 1,
     wallClock.day,
   );
-  const jsDay = localDate.getDay();
-  return jsDay === 0 ? 7 : jsDay;
+  return jsDayToISOWeekday(localDate.getDay());
 };
 
 /**
@@ -115,10 +153,7 @@ const getISOWeekdayFromWallClock = (wallClock: WallClockTime): number => {
  * JavaScript's getDay() returns 0-6 (Sunday-Saturday), so we convert.
  * @deprecated Use getISOWeekdayFromWallClock() for wall-clock time calculations.
  */
-const getISOWeekday = (date: Date): number => {
-  const jsDay = date.getDay();
-  return jsDay === 0 ? 7 : jsDay;
-};
+const getISOWeekday = (date: Date): number => jsDayToISOWeekday(date.getDay());
 
 /**
  * Calculate absolute date from relative date input.
@@ -135,27 +170,17 @@ export const calculateAbsoluteDateFromWallClock = (
 ): Date => {
   const { weekOffset, weekday, time } = input;
 
-  // Validate time format
-  const timeMatch = time.match(/^(\d{2}):(\d{2})$/);
-  if (!timeMatch) {
+  // Validate and parse time
+  const parsedTime = parseHHmm(time);
+  if (!parsedTime) {
     throw new Error(
       `Invalid time format: "${time}". Expected "HH:mm" (e.g., "15:00").`,
     );
   }
-
-  const [, hoursStr, minutesStr] = timeMatch;
-  const hours = parseInt(hoursStr, 10);
-  const minutes = parseInt(minutesStr, 10);
-
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    throw new Error(`Invalid time values: "${time}".`);
-  }
+  const { hours, minutes } = parsedTime;
 
   // Get target ISO weekday (1-7)
-  const targetISOWeekday = WEEKDAY_TO_ISO[weekday];
-  if (!targetISOWeekday) {
-    throw new Error(`Invalid weekday: "${weekday}".`);
-  }
+  const targetISOWeekday = resolveTargetISOWeekday(weekday);
 
   // Get current ISO weekday (1-7) from wall-clock
   const currentISOWeekday = getISOWeekdayFromWallClock(wallClockNow);
@@ -213,27 +238,17 @@ export const calculateAbsoluteDate = (
 ): Date => {
   const { weekOffset, weekday, time } = input;
 
-  // Validate time format
-  const timeMatch = time.match(/^(\d{2}):(\d{2})$/);
-  if (!timeMatch) {
+  // Validate and parse time
+  const parsedTime = parseHHmm(time);
+  if (!parsedTime) {
     throw new Error(
       `Invalid time format: "${time}". Expected "HH:mm" (e.g., "15:00").`,
     );
   }
-
-  const [, hoursStr, minutesStr] = timeMatch;
-  const hours = parseInt(hoursStr, 10);
-  const minutes = parseInt(minutesStr, 10);
-
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    throw new Error(`Invalid time values: "${time}".`);
-  }
+  const { hours, minutes } = parsedTime;
 
   // Get target ISO weekday (1-7)
-  const targetISOWeekday = WEEKDAY_TO_ISO[weekday];
-  if (!targetISOWeekday) {
-    throw new Error(`Invalid weekday: "${weekday}".`);
-  }
+  const targetISOWeekday = resolveTargetISOWeekday(weekday);
 
   // Get current ISO weekday (1-7)
   const currentISOWeekday = getISOWeekday(now);

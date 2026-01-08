@@ -1,4 +1,6 @@
+import { DateTime } from 'luxon';
 import { icsToJson } from '@/utils/icsToJson';
+import { DEFAULT_TIMEZONE } from '@/utils/weekday';
 
 /**
  * Calendar event data model with raw Date objects.
@@ -13,7 +15,7 @@ export type CalendarEvent = {
 };
 
 /**
- * Parse iCal date string to Date object.
+ * Parse iCal date string to Date object using luxon.
  * Handles both UTC (ending with Z) and floating local time formats.
  */
 const parseIcsDate = (icalDate?: string): Date | null => {
@@ -21,35 +23,27 @@ const parseIcsDate = (icalDate?: string): Date | null => {
 
   const isUTC = icalDate.endsWith('Z');
 
+  // Match iCal date format: YYYYMMDD or YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSSZ
   const match = icalDate.match(
     /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?Z?$/,
   );
   if (!match) return null;
 
-  // Include seconds to preserve precision (defaults to '0' if not captured)
   const [, year, month, day, hour, minute, second] = match;
 
-  if (isUTC && hour && minute) {
-    return new Date(
-      Date.UTC(
-        parseInt(year),
-        parseInt(month) - 1,
-        parseInt(day),
-        parseInt(hour),
-        parseInt(minute),
-        parseInt(second ?? '0'),
-      ),
-    );
-  }
-
-  return new Date(
-    parseInt(year),
-    parseInt(month) - 1,
-    parseInt(day),
-    hour ? parseInt(hour) : 0,
-    minute ? parseInt(minute) : 0,
-    second ? parseInt(second) : 0,
+  const dt = DateTime.fromObject(
+    {
+      year: parseInt(year),
+      month: parseInt(month),
+      day: parseInt(day),
+      hour: hour ? parseInt(hour) : 0,
+      minute: minute ? parseInt(minute) : 0,
+      second: second ? parseInt(second) : 0,
+    },
+    { zone: isUTC ? 'utc' : DEFAULT_TIMEZONE },
   );
+
+  return dt.isValid ? dt.toJSDate() : null;
 };
 
 /**

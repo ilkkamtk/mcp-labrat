@@ -1,5 +1,6 @@
+import { DateTime } from 'luxon';
 import type { CalendarEvent } from '@/utils/calendar-events';
-import { JS_WEEKDAY_NAMES } from '@/utils/weekday';
+import { DEFAULT_TIMEZONE } from '@/utils/weekday';
 
 /**
  * Format a Date object as a readable string with weekday.
@@ -8,20 +9,14 @@ import { JS_WEEKDAY_NAMES } from '@/utils/weekday';
 const formatDate = (date: Date | null): string | null => {
   if (!date) return null;
 
-  const year = date.getFullYear();
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const day = date.getDate().toString().padStart(2, '0');
-  const weekday = JS_WEEKDAY_NAMES[date.getDay()];
-  const hour = date.getHours();
-  const minute = date.getMinutes();
+  const dt = DateTime.fromJSDate(date).setZone(DEFAULT_TIMEZONE);
+  const isMidnight = dt.hour === 0 && dt.minute === 0;
 
-  if (hour === 0 && minute === 0) {
-    return `${year}-${month}-${day} (${weekday})`;
+  if (isMidnight) {
+    return dt.toFormat('yyyy-MM-dd (cccc)');
   }
 
-  const hourStr = hour.toString().padStart(2, '0');
-  const minuteStr = minute.toString().padStart(2, '0');
-  return `${year}-${month}-${day} (${weekday}) ${hourStr}:${minuteStr}`;
+  return dt.toFormat('yyyy-MM-dd (cccc) HH:mm');
 };
 
 /**
@@ -71,32 +66,24 @@ const formatDateTime = (
     includeTime = true,
   } = options;
 
-  const formatOptions: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  };
+  const dt = DateTime.fromJSDate(date)
+    .setZone(DEFAULT_TIMEZONE)
+    .setLocale(locale);
 
-  if (includeWeekday) {
-    formatOptions.weekday = 'long';
-  }
-
+  // Build format string based on options
+  let format = includeWeekday ? 'cccc d.M.yyyy' : 'd.M.yyyy';
   if (includeTime) {
-    formatOptions.hour = '2-digit';
-    formatOptions.minute = '2-digit';
+    format += ' HH:mm';
   }
 
-  return date.toLocaleString(locale, formatOptions);
+  return dt.toFormat(format);
 };
 
 /**
  * Format a time-only string from a Date.
  */
-const formatTime = (date: Date, locale: string = 'fi-FI'): string => {
-  return date.toLocaleTimeString(locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const formatTime = (date: Date): string => {
+  return DateTime.fromJSDate(date).setZone(DEFAULT_TIMEZONE).toFormat('HH:mm');
 };
 
 export { formatEvent, formatEventList, formatDateTime, formatTime, formatDate };
