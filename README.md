@@ -76,6 +76,78 @@ Create a `.env` file in the project root.
 - `CALDAV_USERNAME` (optional, default: `username`)
 - `CALDAV_PASSWORD` (optional, default: `password`)
 
+## Radicale (dev CalDAV server)
+
+For local development you can run a minimal Radicale CalDAV server with no authentication.
+
+### macOS / Linux
+
+1. Install Radicale
+
+```bash
+python3 -m pip install --user radicale
+```
+
+1. Create a local config + data folder
+
+```bash
+mkdir -p radicale-data/collections
+cat > radicale.config <<'EOF'
+[server]
+hosts = 127.0.0.1:5232
+
+[auth]
+type = none
+
+[storage]
+filesystem_folder = ./radicale-data/collections
+EOF
+```
+
+1. Run Radicale
+
+```bash
+radicale --config ./radicale.config
+```
+
+### Windows (PowerShell)
+
+1. Install Radicale
+
+```powershell
+py -m pip install --user radicale
+```
+
+1. Create a local config + data folder
+
+```powershell
+New-Item -ItemType Directory -Force -Path .\radicale-data\collections | Out-Null
+@'
+[server]
+hosts = 127.0.0.1:5232
+
+[auth]
+type = none
+
+[storage]
+filesystem_folder = ./radicale-data/collections
+'@ | Set-Content -Encoding UTF8 .\radicale.config
+```
+
+1. Run Radicale
+
+```powershell
+py -m radicale --config .\radicale.config
+```
+
+1. Point this app to Radicale
+
+In `.env`:
+
+- `CALDAV_SERVER_URL=http://localhost:5232/`
+- `CALDAV_USERNAME=anything` (ignored when `auth=none`)
+- `CALDAV_PASSWORD=anything` (ignored when `auth=none`)
+
 ## Scripts
 
 - `npm run dev` – run server with nodemon + ts-node
