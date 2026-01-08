@@ -12,21 +12,15 @@ import {
   getNow,
   type Weekday,
 } from '@/utils/relativeDateCalculator';
-import { formatEventList } from '@/utils/eventFormatting';
+import {
+  formatEventList,
+  formatDateTime,
+  formatTime,
+} from '@/utils/eventFormatting';
+import { weekdaySchema } from '@/utils/weekday';
 
 // ------------------- MCP Server -------------------
 const mcpServer = new McpServer({ name: 'calendar-server', version: '1.0.0' });
-
-// Weekday enum for Zod schema
-const weekdayEnum = z.enum([
-  'monday',
-  'tuesday',
-  'wednesday',
-  'thursday',
-  'friday',
-  'saturday',
-  'sunday',
-]);
 
 // ------------------- MCP Tools -------------------
 mcpServer.registerTool(
@@ -52,7 +46,7 @@ Examples:
         .describe(
           'Week offset from current week. 0 = this week, 1 = next week, etc.',
         ),
-      weekday: weekdayEnum.describe(
+      weekday: weekdaySchema.describe(
         'Target weekday (monday, tuesday, wednesday, thursday, friday, saturday, sunday)',
       ),
       time: z
@@ -113,7 +107,7 @@ Examples:
         content: [
           {
             type: 'text',
-            text: `Successfully scheduled "${title}" for ${eventStart.toLocaleString('fi-FI')} (${weekday})`,
+            text: `Successfully scheduled "${title}" for ${formatDateTime(eventStart)} (${weekday})`,
           },
         ],
       };
@@ -164,7 +158,7 @@ Provide relative date parameters to specify the time slot.`,
         .describe(
           'Week offset from current week. 0 = this week, 1 = next week, etc.',
         ),
-      weekday: weekdayEnum.describe(
+      weekday: weekdaySchema.describe(
         'Target weekday (monday, tuesday, wednesday, thursday, friday, saturday, sunday)',
       ),
       time: z
@@ -197,18 +191,8 @@ Provide relative date parameters to specify the time slot.`,
 
       const events = await getEventsInRange(slotStart, slotEnd);
 
-      const slotStartStr = slotStart.toLocaleString('fi-FI', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      const slotEndStr = slotEnd.toLocaleTimeString('fi-FI', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      const slotStartStr = formatDateTime(slotStart);
+      const slotEndStr = formatTime(slotEnd);
 
       const isFree = events.length === 0;
       const availabilityStatus = isFree

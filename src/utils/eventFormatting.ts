@@ -1,14 +1,5 @@
 import type { CalendarEvent } from '@/utils/calendar-events';
-
-const WEEKDAY_NAMES = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-];
+import { JS_WEEKDAY_NAMES } from '@/utils/weekday';
 
 /**
  * Format a Date object as a readable string with weekday.
@@ -20,7 +11,7 @@ const formatDate = (date: Date | null): string | null => {
   const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
-  const weekday = WEEKDAY_NAMES[date.getDay()];
+  const weekday = JS_WEEKDAY_NAMES[date.getDay()];
   const hour = date.getHours();
   const minute = date.getMinutes();
 
@@ -62,4 +53,50 @@ const formatEventList = (
   return events.map(formatEvent).join('\n');
 };
 
-export { formatEvent, formatEventList };
+/**
+ * Format a Date as a localized datetime string.
+ * Used for user-facing messages in MCP tool responses.
+ */
+const formatDateTime = (
+  date: Date,
+  options: {
+    locale?: string;
+    includeWeekday?: boolean;
+    includeTime?: boolean;
+  } = {},
+): string => {
+  const {
+    locale = 'fi-FI',
+    includeWeekday = true,
+    includeTime = true,
+  } = options;
+
+  const formatOptions: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  };
+
+  if (includeWeekday) {
+    formatOptions.weekday = 'long';
+  }
+
+  if (includeTime) {
+    formatOptions.hour = '2-digit';
+    formatOptions.minute = '2-digit';
+  }
+
+  return date.toLocaleString(locale, formatOptions);
+};
+
+/**
+ * Format a time-only string from a Date.
+ */
+const formatTime = (date: Date, locale: string = 'fi-FI'): string => {
+  return date.toLocaleTimeString(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+export { formatEvent, formatEventList, formatDateTime, formatTime, formatDate };

@@ -5,10 +5,8 @@ import {
   ChatCompletion,
   ChatCompletionMessageParam,
 } from 'openai/resources/index';
-import {
-  getCurrentDateInfo,
-  setTimezone,
-} from '@/utils/relativeDateCalculator';
+import { getCurrentDateInfo } from '@/utils/relativeDateCalculator';
+import { DEFAULT_TIMEZONE } from '@/utils/weekday';
 
 type RunPromptResponse = {
   answer: string;
@@ -19,10 +17,8 @@ const MAX_ROUNDS = 10;
 
 export const runPromptWithMcpServer = async (
   prompt: string,
-  timezone: string = 'Europe/Helsinki',
+  timezone: string = DEFAULT_TIMEZONE,
 ): Promise<RunPromptResponse> => {
-  // Set timezone for date calculations
-  setTimezone(timezone);
   const mcpServerUrl = process.env.MCP_SERVER_URL;
   if (!mcpServerUrl) {
     throw new Error('MCP_SERVER_URL environment variable is not set');
@@ -39,7 +35,7 @@ export const runPromptWithMcpServer = async (
   );
   await mcpClient.connect(transport);
 
-  const dateInfo = getCurrentDateInfo();
+  const dateInfo = getCurrentDateInfo(timezone);
 
   const messages: ChatCompletionMessageParam[] = [
     {

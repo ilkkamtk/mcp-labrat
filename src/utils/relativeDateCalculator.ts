@@ -4,14 +4,14 @@
  * Uses ISO-8601 week rules (Monday = 1, Sunday = 7).
  */
 
-export type Weekday =
-  | 'monday'
-  | 'tuesday'
-  | 'wednesday'
-  | 'thursday'
-  | 'friday'
-  | 'saturday'
-  | 'sunday';
+import {
+  type Weekday,
+  WEEKDAY_TO_ISO,
+  ISO_TO_WEEKDAY,
+  DEFAULT_TIMEZONE,
+} from '@/utils/weekday';
+
+export type { Weekday };
 
 export type RelativeDateInput = {
   weekOffset: number; // 0 = this week, 1 = next week, -1 = last week, etc.
@@ -19,53 +19,14 @@ export type RelativeDateInput = {
   time: string; // "HH:mm" format
 };
 
-// ISO-8601: Monday = 1, Sunday = 7
-const WEEKDAY_TO_ISO: Record<Weekday, number> = {
-  monday: 1,
-  tuesday: 2,
-  wednesday: 3,
-  thursday: 4,
-  friday: 5,
-  saturday: 6,
-  sunday: 7,
-};
-
-const ISO_TO_WEEKDAY: Record<number, Weekday> = {
-  1: 'monday',
-  2: 'tuesday',
-  3: 'wednesday',
-  4: 'thursday',
-  5: 'friday',
-  6: 'saturday',
-  7: 'sunday',
-};
-
-// Current timezone - set by setTimezone()
-let currentTimezone: string = 'Europe/Helsinki';
-
-/**
- * Set the timezone to use for all date calculations.
- */
-export const setTimezone = (timezone: string): void => {
-  currentTimezone = timezone;
-};
-
-/**
- * Get the current timezone.
- */
-export const getTimezone = (): string => {
-  return currentTimezone;
-};
-
 /**
  * Get current date/time in a specific timezone.
- * @param timezone - IANA timezone string (e.g., 'Europe/Helsinki'). Defaults to module timezone.
+ * @param timezone - IANA timezone string (e.g., 'Europe/Helsinki'). Defaults to DEFAULT_TIMEZONE.
  */
-export const getNow = (timezone?: string): Date => {
-  const tz = timezone ?? currentTimezone;
+export const getNow = (timezone: string = DEFAULT_TIMEZONE): Date => {
   // Get current time formatted in the target timezone
   const nowStr = new Date().toLocaleString('en-CA', {
-    timeZone: tz,
+    timeZone: timezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -172,11 +133,12 @@ export const calculateEndDate = (
 /**
  * Get current date info for the system prompt.
  * Returns human-readable info to help LLM understand the current context.
- * @param timezone - IANA timezone string. Defaults to module timezone.
+ * @param timezone - IANA timezone string. Defaults to DEFAULT_TIMEZONE.
  */
-export const getCurrentDateInfo = (timezone?: string): string => {
-  const tz = timezone ?? currentTimezone;
-  const now = getNow(tz);
+export const getCurrentDateInfo = (
+  timezone: string = DEFAULT_TIMEZONE,
+): string => {
+  const now = getNow(timezone);
   const isoWeekday = getISOWeekday(now);
   const weekdayName = ISO_TO_WEEKDAY[isoWeekday];
 
@@ -186,7 +148,7 @@ export const getCurrentDateInfo = (timezone?: string): string => {
   return (
     `Current date: ${dateStr} (${weekdayName}), ` +
     `Current time: ${timeStr}, ` +
-    `Timezone: ${tz}, ` +
+    `Timezone: ${timezone}, ` +
     `ISO weekday: ${isoWeekday} (1=Monday, 7=Sunday)`
   );
 };

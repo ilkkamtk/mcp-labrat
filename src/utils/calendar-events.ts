@@ -26,7 +26,8 @@ const parseIcsDate = (icalDate?: string): Date | null => {
   );
   if (!match) return null;
 
-  const [, year, month, day, hour, minute] = match;
+  // Include seconds to preserve precision (defaults to '0' if not captured)
+  const [, year, month, day, hour, minute, second] = match;
 
   if (isUTC && hour && minute) {
     return new Date(
@@ -36,7 +37,7 @@ const parseIcsDate = (icalDate?: string): Date | null => {
         parseInt(day),
         parseInt(hour),
         parseInt(minute),
-        0,
+        parseInt(second ?? '0'),
       ),
     );
   }
@@ -47,6 +48,7 @@ const parseIcsDate = (icalDate?: string): Date | null => {
     parseInt(day),
     hour ? parseInt(hour) : 0,
     minute ? parseInt(minute) : 0,
+    second ? parseInt(second) : 0,
   );
 };
 
