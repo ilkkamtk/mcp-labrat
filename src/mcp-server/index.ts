@@ -88,7 +88,8 @@ Examples:
     try {
       // Calculate absolute dates in TypeScript - NOT by LLM
       // Use wall-clock time for correct timezone handling
-      const wallClockNow = getWallClockNow(timezone ?? DEFAULT_TIMEZONE);
+      const effectiveTimezone = timezone ?? DEFAULT_TIMEZONE;
+      const wallClockNow = getWallClockNow(effectiveTimezone);
       const startDate = calculateAbsoluteDateFromWallClock(wallClockNow, {
         weekOffset,
         weekday: weekday as Weekday,
@@ -108,7 +109,7 @@ Examples:
         content: [
           {
             type: 'text',
-            text: `Successfully scheduled "${title}" for ${formatDateTime(eventStart)}`,
+            text: `Successfully scheduled "${title}" for ${formatDateTime(eventStart, { timezone: effectiveTimezone })}`,
           },
         ],
       };
@@ -183,7 +184,8 @@ Provide relative date parameters to specify the time slot.`,
   async ({ weekOffset, weekday, time, durationMinutes, timezone }) => {
     try {
       // Use wall-clock time for correct timezone handling
-      const wallClockNow = getWallClockNow(timezone ?? DEFAULT_TIMEZONE);
+      const effectiveTimezone = timezone ?? DEFAULT_TIMEZONE;
+      const wallClockNow = getWallClockNow(effectiveTimezone);
       const slotStart = calculateAbsoluteDateFromWallClock(wallClockNow, {
         weekOffset,
         weekday: weekday as Weekday,
@@ -193,14 +195,16 @@ Provide relative date parameters to specify the time slot.`,
 
       const events = await getEventsInRange(slotStart, slotEnd);
 
-      const slotStartStr = formatDateTime(slotStart);
-      const slotEndStr = formatTime(slotEnd);
+      const slotStartStr = formatDateTime(slotStart, {
+        timezone: effectiveTimezone,
+      });
+      const slotEndStr = formatTime(slotEnd, effectiveTimezone);
 
       const isFree = events.length === 0;
       const availabilityStatus = isFree
         ? 'AVAILABLE - This time slot is FREE, no events scheduled.'
         : `BUSY - This time slot is NOT FREE. Found ${events.length} event(s):`;
-      const eventList = formatEventList(events);
+      const eventList = formatEventList(events, '', effectiveTimezone);
 
       return {
         content: [
@@ -209,7 +213,15 @@ Provide relative date parameters to specify the time slot.`,
             text: `Time slot: ${slotStartStr} - ${slotEndStr}\n${availabilityStatus}${eventList ? '\n' + eventList : ''}`,
           },
         ],
-        structuredContent: { events, isFree },
+        structuredContent: {
+          events,
+          isFree,
+          slot: {
+            start: slotStart.toISOString(),
+            end: slotEnd.toISOString(),
+            timezone: effectiveTimezone,
+          },
+        },
       };
     } catch (error) {
       return {
