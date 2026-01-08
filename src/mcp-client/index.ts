@@ -28,9 +28,9 @@ export const runPromptWithMcpServer = async (
   if (!mcpServerUrl) {
     throw new Error('MCP_SERVER_URL environment variable is not set');
   }
-  const openAiApiUrl = process.env.OPENAI_API_URL;
-  if (!openAiApiUrl) {
-    throw new Error('OPENAI_API_URL environment variable is not set');
+  const openAiProxyUrl = process.env.OPENAI_PROXY_URL;
+  if (!openAiProxyUrl) {
+    throw new Error('OPENAI_PROXY_URL environment variable is not set');
   }
 
   const transport = new StreamableHTTPClientTransport(new URL(mcpServerUrl));
@@ -78,7 +78,7 @@ ${SYSTEM_PROMPT_TOOL_RULES}
 
     for (let i = 0; i < MAX_ROUNDS; i++) {
       const completion = await fetchData<ChatCompletion>(
-        `${openAiApiUrl}/v1/chat/completions`,
+        `${openAiProxyUrl}/v1/chat/completions`,
         {
           method: 'POST',
           headers: {

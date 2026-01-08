@@ -16,6 +16,10 @@ This project is a small Express app that:
   - Chat Completions (`/v1/chat/completions`)
   - Audio Transcriptions (`/v1/audio/transcriptions`)
 
+In this lab, `OPENAI_PROXY_URL` typically points to a proxy service (not OpenAI directly). The proxy is responsible for adding any required authentication (e.g. API keys) to outgoing requests.
+
+Because auth is handled by the proxy, the server uses direct HTTP requests (via `fetchData`) instead of the official OpenAI SDK.
+
 ## Quick start
 
 1. Install
@@ -27,8 +31,10 @@ This project is a small Express app that:
 2. Create `.env`
 
    ```bash
-   cp .env.example .env
+   cp .env-sample .env
    ```
+
+   Then edit `.env` and set `OPENAI_PROXY_URL` to your proxy/base URL (e.g. `http://localhost:1234` or your deployed proxy).
 
 3. Run the dev server
 
@@ -55,8 +61,9 @@ Create a `.env` file in the project root.
 - `MCP_SERVER_URL` (required)
   - Example: `http://localhost:3000/api/v1/mcp`
   - This can point back to the same server instance.
-- `OPENAI_API_URL` (required)
-  - Example: `https://api.openai.com`
+- `OPENAI_PROXY_URL` (required)
+  - Base URL of your OpenAI-compatible proxy (the app calls `/v1/chat/completions` and `/v1/audio/transcriptions` under it)
+  - Example: `http://localhost:1234`
 - `OPENAI_MODEL` (optional, default: `gpt-4o`)
 
 ### Audio transcription (Whisper)
@@ -140,7 +147,7 @@ The MCP client instructs the model to use tools for all user requests and applie
 
 - **Mic permission**: The browser will prompt for microphone access the first time. If recording fails, check site permissions.
 - **CalDAV auth**: If the calendar tools always return empty results, verify `CALDAV_*` values and that your user has at least one calendar.
-- **OpenAI URL**: `OPENAI_API_URL` must be the base URL; the app calls `/v1/chat/completions` and `/v1/audio/transcriptions` under it.
+- **Proxy URL**: `OPENAI_PROXY_URL` must be the base URL; the app calls `/v1/chat/completions` and `/v1/audio/transcriptions` under it.
 - **Uploads cleanup**: Uploaded audio is deleted best-effort after transcription; check filesystem permissions if `uploads/` grows unexpectedly.
 
 ---

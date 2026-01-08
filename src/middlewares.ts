@@ -54,10 +54,10 @@ const audioTranscriptionMiddleware = async (
   };
 
   try {
-    const openAiApiUrl = process.env.OPENAI_API_URL;
-    if (!openAiApiUrl) {
+    const openAiProxyUrl = process.env.OPENAI_PROXY_URL;
+    if (!openAiProxyUrl) {
       throw new CustomError(
-        'Audio transcription service is not configured on the server',
+        'Audio transcription service is not configured on the server (set OPENAI_PROXY_URL)',
         500,
       );
     }
@@ -75,7 +75,7 @@ const audioTranscriptionMiddleware = async (
     );
 
     const transcription = await fetchData<TranscriptionResponse>(
-      openAiApiUrl + '/v1/audio/transcriptions',
+      openAiProxyUrl + '/v1/audio/transcriptions',
       {
         method: 'POST',
         body: formData,

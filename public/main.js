@@ -121,6 +121,10 @@ sendBtn.addEventListener('click', async () => {
 
   const formData = new FormData();
   formData.append('audio', lastRecordingBlob, 'command.webm');
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (timezone) {
+    formData.append('timezone', timezone);
+  }
 
   setUiState('sending');
   output.textContent = 'Processing...';
