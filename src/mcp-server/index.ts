@@ -5,14 +5,14 @@ import {
   listEvents,
   getEventsInRange,
 } from '@/calDav/calendarClient';
+import { parseCalendarObjects } from '@/utils/calendar-events';
 import {
   calculateAbsoluteDate,
   calculateEndDate,
   getNow,
   type Weekday,
 } from '@/utils/relativeDateCalculator';
-import { icsToJson } from '@/utils/icsToJson';
-import { parseICalDate } from '@/utils/ical-lib';
+import { formatEventList } from '@/utils/eventFormatting';
 
 // ------------------- MCP Server -------------------
 const mcpServer = new McpServer({ name: 'calendar-server', version: '1.0.0' });
@@ -73,6 +73,12 @@ Examples:
         .string()
         .optional()
         .describe('Optional location of the event'),
+      timezone: z
+        .string()
+        .optional()
+        .describe(
+          'IANA timezone (e.g., "Europe/Helsinki"). Defaults to Europe/Helsinki if not specified.',
+        ),
     }),
   },
   async ({
@@ -83,10 +89,11 @@ Examples:
     durationMinutes,
     description,
     location,
+    timezone,
   }) => {
     try {
       // Calculate absolute dates in TypeScript - NOT by LLM
-      const now = getNow();
+      const now = getNow(timezone);
       const startDate = calculateAbsoluteDate(now, {
         weekOffset,
         weekday: weekday as Weekday,
@@ -128,39 +135,17 @@ mcpServer.registerTool(
   },
   async () => {
     const rawEvents = await listEvents();
-
-    // Parse iCal data from each CalDAV object into readable JSON
-    const parsedEvents = rawEvents
-      .filter((calendarObject) => calendarObject.data)
-      .flatMap((calendarObject) => {
-        const parsed = icsToJson(calendarObject.data);
-        return parsed.map((parsedEvent) => ({
-          title: parsedEvent.summary || 'Untitled',
-          start: parseICalDate(parsedEvent.startDate),
-          end: parseICalDate(parsedEvent.endDate),
-          location: parsedEvent.location || null,
-          description: parsedEvent.description || null,
-        }));
-      });
-
-    const eventList =
-      parsedEvents.length > 0
-        ? parsedEvents
-            .map(
-              (event) =>
-                `- ${event.title}: ${event.start}${event.end ? ` to ${event.end}` : ''}${event.location ? ` at ${event.location}` : ''}`,
-            )
-            .join('\n')
-        : 'No events found.';
+    const events = parseCalendarObjects(rawEvents);
+    const eventList = formatEventList(events, 'No events found.');
 
     return {
       content: [
         {
           type: 'text',
-          text: `Found ${parsedEvents.length} events:\n${eventList}`,
+          text: `Found ${events.length} events:\n${eventList}`,
         },
       ],
-      structuredContent: { events: parsedEvents },
+      structuredContent: { events },
     };
   },
 );
@@ -192,11 +177,17 @@ Provide relative date parameters to specify the time slot.`,
         .positive()
         .optional()
         .describe('Duration in minutes. Defaults to 60'),
+      timezone: z
+        .string()
+        .optional()
+        .describe(
+          'IANA timezone (e.g., "Europe/Helsinki"). Defaults to Europe/Helsinki if not specified.',
+        ),
     }),
   },
-  async ({ weekOffset, weekday, time, durationMinutes }) => {
+  async ({ weekOffset, weekday, time, durationMinutes, timezone }) => {
     try {
-      const now = getNow();
+      const now = getNow(timezone);
       const slotStart = calculateAbsoluteDate(now, {
         weekOffset,
         weekday: weekday as Weekday,
@@ -219,21 +210,11 @@ Provide relative date parameters to specify the time slot.`,
         minute: '2-digit',
       });
 
-      // Clear indication of availability for LLM
       const isFree = events.length === 0;
       const availabilityStatus = isFree
         ? 'AVAILABLE - This time slot is FREE, no events scheduled.'
         : `BUSY - This time slot is NOT FREE. Found ${events.length} event(s):`;
-
-      const eventList =
-        events.length > 0
-          ? events
-              .map(
-                (event) =>
-                  `- ${event.title}: ${event.start} to ${event.end}${event.location ? ` at ${event.location}` : ''}`,
-              )
-              .join('\n')
-          : '';
+      const eventList = formatEventList(events);
 
       return {
         content: [

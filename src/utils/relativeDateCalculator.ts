@@ -58,12 +58,14 @@ export const getTimezone = (): string => {
 };
 
 /**
- * Get current date/time in the configured timezone.
+ * Get current date/time in a specific timezone.
+ * @param timezone - IANA timezone string (e.g., 'Europe/Helsinki'). Defaults to module timezone.
  */
-export const getNow = (): Date => {
+export const getNow = (timezone?: string): Date => {
+  const tz = timezone ?? currentTimezone;
   // Get current time formatted in the target timezone
   const nowStr = new Date().toLocaleString('en-CA', {
-    timeZone: currentTimezone,
+    timeZone: tz,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -170,9 +172,11 @@ export const calculateEndDate = (
 /**
  * Get current date info for the system prompt.
  * Returns human-readable info to help LLM understand the current context.
+ * @param timezone - IANA timezone string. Defaults to module timezone.
  */
-export const getCurrentDateInfo = (): string => {
-  const now = getNow();
+export const getCurrentDateInfo = (timezone?: string): string => {
+  const tz = timezone ?? currentTimezone;
+  const now = getNow(tz);
   const isoWeekday = getISOWeekday(now);
   const weekdayName = ISO_TO_WEEKDAY[isoWeekday];
 
@@ -182,7 +186,7 @@ export const getCurrentDateInfo = (): string => {
   return (
     `Current date: ${dateStr} (${weekdayName}), ` +
     `Current time: ${timeStr}, ` +
-    `Timezone: ${currentTimezone}, ` +
+    `Timezone: ${tz}, ` +
     `ISO weekday: ${isoWeekday} (1=Monday, 7=Sunday)`
   );
 };
