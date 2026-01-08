@@ -145,6 +145,12 @@ sendBtn.addEventListener('click', async () => {
 
     const data = await res.json();
 
+    if (!data || typeof data.answer !== 'string') {
+      output.textContent = 'Unexpected response format from server.';
+      setUiState(lastRecordingBlob ? 'recorded' : 'idle');
+      return;
+    }
+
     // Display MCP response
     output.textContent = `MCP Response:\n${data.answer}`;
 
@@ -157,7 +163,11 @@ sendBtn.addEventListener('click', async () => {
 
       if (canSpeak) {
         const utterance = new SpeechSynthesisUtterance(data.answer);
-        utterance.lang = 'fi-FI';
+        const inferredLang =
+          (document.documentElement && document.documentElement.lang) ||
+          navigator.language ||
+          'en-US';
+        utterance.lang = inferredLang;
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
       }

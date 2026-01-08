@@ -3,7 +3,10 @@ import { promises as fs } from 'fs';
 import { ErrorResponse } from './types/LocalTypes';
 import CustomError from './classes/CustomError';
 import fetchData from './utils/fetchData';
-import { TranscriptionVerbose } from 'openai/resources/audio/transcriptions';
+
+type TranscriptionResponse = {
+  text: string;
+};
 
 const notFound = (req: Request, res: Response, next: NextFunction) => {
   const error = new CustomError(`🔍 - Not Found - ${req.originalUrl}`, 404);
@@ -66,9 +69,12 @@ const audioTranscriptionMiddleware = async (
 
     const formData = new FormData();
     formData.append('file', audioBlob, file.originalname ?? 'audio');
-    formData.append('model', 'whisper-1');
+    formData.append(
+      'model',
+      process.env.OPENAI_TRANSCRIPTION_MODEL || 'whisper-1',
+    );
 
-    const transcription = await fetchData<TranscriptionVerbose>(
+    const transcription = await fetchData<TranscriptionResponse>(
       openAiApiUrl + '/v1/audio/transcriptions',
       {
         method: 'POST',

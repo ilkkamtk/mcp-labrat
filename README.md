@@ -61,8 +61,7 @@ Create a `.env` file in the project root.
 
 ### Audio transcription (Whisper)
 
-- `OPENAI_API_KEY` (required for transcription)
-  - Used as `Authorization: Bearer ...` when calling `/v1/audio/transcriptions`.
+- `OPENAI_TRANSCRIPTION_MODEL` (optional, default: `whisper-1`)
 
 ### CalDAV (calendar backing store)
 
